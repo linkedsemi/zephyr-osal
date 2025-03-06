@@ -1,0 +1,3 @@
+config ZEPHRY_OSAL
+    default y
+    bool "openbmc zephyr OS adapter layer"
