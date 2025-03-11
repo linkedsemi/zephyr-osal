@@ -1,4 +1,4 @@
-if(CONFIG_ZEPHRY_OSAL)
+if(CONFIG_ZEPHYR_OSAL)
     zephyr_library()
     # zephyr_library_sources(
     # )
