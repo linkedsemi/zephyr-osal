@@ -300,20 +300,29 @@ static int i2c_dev_init(void)
 static int i2c_init(void)
 {
 	printk("i2c_init----------start\n");
-	int rc = i2c_dev_init();
+
+	int rc = fs_register(FS_I2C, &i2cdev_fs);
+	if (rc < 0) {
+		printk("i2cfs register error (%d)\n", rc);
+	} else {
+		printk("i2cfs fs registered\n");
+	}
+	
+	rc = i2c_dev_init();
 	if (rc != 0)
 	{
+		printk("i2cfs init failed\n");
 		return rc;
 	}
 
 	// 将i2c文件系统接口注册到 Zephyr 文件系统中
 	printk("i2c_init----------end\n");
-	return fs_register(FS_I2C, &i2cdev_fs);
+	return rc;
 }
 
 void i2c_main()
 {
-	i2c_init();
+	i2c_dev_init();
 }
 
 // 系统初始化
