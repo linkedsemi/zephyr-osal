@@ -50,7 +50,7 @@ static struct fs_mount_t i2cfs_mnt[I2C_NUM];
 struct i2c_device_info i2c_devices[] = {
 	DT_INST_FOREACH_STATUS_OKAY(I2C_DEVICE_PROCESS)};
 
-struct i2c_device_info i2c_devices[I2C_NUM];
+// struct i2c_device_info i2c_devices[I2C_NUM];
 
 static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t mode)
 {
