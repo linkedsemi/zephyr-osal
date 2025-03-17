@@ -25,7 +25,7 @@
 
 #define MAX_I2C_DEVICES 14 /* The maximum number of I2C devices */
 
-#define I2C_MNT_PONINT "/dev"
+#define I2C_MNT_POINT "/dev"
 
 #define DT_DRV_COMPAT linkedsemi_ls_i2c
 
@@ -159,7 +159,7 @@ static ssize_t i2cdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
 	}
 
 	printk("I2C writing %zu bytes to device at address 0x%x", size, client->addr);
-	return ret;
+	return size;
 }
 struct i2c_msg_linux
 {
@@ -258,8 +258,35 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 	}
 }
 
+static int i2cdev_mount(struct fs_mount_t *mountp)
+{
+	struct i2c_device_info *i2c_fs = mountp->fs_data;
+
+	if (!i2c_fs->dev || !device_is_ready(i2c_fs->dev)) {
+		printk("I2C device not ready 1\n");
+		return -ENODEV;
+	}
+	
+	printk("I2C device mounted successfully\n");
+	return 0;
+}
+static int i2cdev_unmount(struct fs_mount_t *mountp)
+{
+	// struct i2c_device_info *i2c_fs = mountp->fs_data;
+
+	if (mountp == NULL) {
+		printk("Invalid mount point");
+		return -EINVAL;
+	}
+
+	mountp->mnt_point = NULL;
+	return 0;
+}
+
 /* File system interface */
 static const struct fs_file_system_t i2cdev_fs = {
+	.mount = i2cdev_mount,
+	.unmount = i2cdev_unmount,
 	.open = i2cdev_open,
 	.close = i2cdev_close,
 	.read = i2cdev_read,   // 从 I2C 设备中读取数据并返回给用户空间
@@ -279,8 +306,9 @@ static int i2c_dev_init(void)
 	for (int i = 0; i < I2C_NUM; i++)
 	{
 		i2cfs_mnt[i].type = FS_I2C;
-		i2cfs_mnt[i].mnt_point = I2C_MNT_PONINT;
+		i2cfs_mnt[i].mnt_point = I2C_MNT_POINT;
 		i2cfs_mnt[i].fs_data = &i2c_devices[i];
+    	// i2cfs_mnt[i].flags = FS_MOUNT_FLAG_READ_ONLY;
 
 		printk("i2cfs_mnt[%zu]: type: %d, mnt_point: %s, fs_data: %p\n", i, i2cfs_mnt[i].type, i2cfs_mnt[i].mnt_point, i2cfs_mnt[i].fs_data);
 
@@ -288,7 +316,6 @@ static int i2c_dev_init(void)
 		if (rc != 0)
 		{
 			printk("Error mounting as i2cfs: %d", rc);
-			k_free((void *)i2cfs_mnt[i].mnt_point);
 			i2cfs_mnt[i].mnt_point = NULL;
 			return rc;
 		}
@@ -315,7 +342,6 @@ static int i2c_init(void)
 		return rc;
 	}
 
-	// 将i2c文件系统接口注册到 Zephyr 文件系统中
 	printk("i2c_init----------end\n");
 	return rc;
 }
