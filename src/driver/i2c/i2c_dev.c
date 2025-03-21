@@ -9,10 +9,12 @@
 #include <stdlib.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/fs_sys.h>
-#include <zephyr/sys/printk.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/logging/log.h> 
+
+LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR);  // 注册日志模块
 
 #define I2C_SLAVE 0x0703 /* Use this slave address */
 
@@ -73,6 +75,7 @@ static const char* getFileName(const char* filePath) {
 
 static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t mode)
 {
+	LOG_ERROR("i2cdev_open start----\n");
 	struct i2c_device_info *client = NULL;
 
 	// 遍历所有 I2C 设备实例，找到对应的设备
@@ -86,26 +89,26 @@ static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t m
 	}
 
 	if (client == NULL) {
-        printk("Error: I2C device with name '%s' not found\n", file_name);
+        LOG_ERROR("Error: I2C device with name '%s' not found\n", file_name);
         return -ENODEV;
     }
 
 	if (client->opened) {
-		printk("device name is opened");
+		LOG_ERROR("device name is opened");
 		return -EINVAL;
 	}
 
 	client->opened = 1;
 
-	if (client->dev || !device_is_ready(client->dev))
+	if (!device_is_ready(client->dev))
 	{
-		printk("Error: I2C device with name '%s' is not ready\n", file_name);
+		LOG_ERROR("Error: I2C device with name '%s' is not ready\n", file_name);
 		client->opened = 0;
 		return -ENODEV;
 	}
 
 	if (zfp->mp == NULL) {
-        printk("Error: File system mount point is NULL\n");
+        LOG_ERROR("Error: File system mount point is NULL\n");
         client->opened = 0;
         return -EINVAL;
     }
@@ -113,16 +116,17 @@ static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t m
 	zfp->filep = client;
 	zfp->mp = &i2cfs_mnt;
 
-	printk("I2C device with name '%s' opened successfully\n", file_name);
+	LOG_ERROR("I2C device with name '%s' opened successfully\n", file_name);
 	return 0;
 }
 
 static int i2cdev_close(struct fs_file_t *zfp)
 {
+	LOG_ERROR("i2cdev_close start----\n");
 	if (zfp->mp)
 	{
 		zfp->mp = NULL;
-		printk("Closed i2cfs mount");
+		LOG_ERROR("Closed i2cfs mount");
 	}
 
 	return 0;
@@ -130,11 +134,12 @@ static int i2cdev_close(struct fs_file_t *zfp)
 
 static ssize_t i2cdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 {
+	LOG_ERROR("i2cdev_read start----\n");
 	struct i2c_device_info *client = zfp->filep;
 
 	if (client == NULL)
 	{
-		printk("No client context");
+		LOG_ERROR("No client context");
 		return -EINVAL;
 	}
 
@@ -146,46 +151,47 @@ static ssize_t i2cdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 	int ret = i2c_read(client->dev, (uint8_t *)ptr, size, client->addr);
 	if (ret != 0)
 	{
-		printk("Read failed: %d (addr=0x%02X)", ret, client->addr);
+		LOG_ERROR("Read failed: %d (addr=0x%02X)", ret, client->addr);
 		return ret;
 	}
 
-	printk("Read %zu bytes from I2C 0x%02X", size, client->addr);
+	LOG_ERROR("Read %zu bytes from I2C 0x%02X", size, client->addr);
 	return size;
 }
 
 static ssize_t i2cdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
 {
+	LOG_ERROR("i2cdev_write start----\n");
 	struct i2c_device_info *client = zfp->filep;
 	const uint8_t *write_buf = (const uint8_t *)ptr;
 
 	if (client == NULL)
 	{
-		printk("No client context");
+		LOG_ERROR("No client context");
 		return -EINVAL;
 	}
 
 	if (ptr == NULL)
 	{
-		printk("Null buffer pointer");
+		LOG_ERROR("Null buffer pointer");
 		return -EFAULT;
 	}
 
 	if (size > CONFIG_I2C_DEV_MAX_SIZE)
 	{
 		size = CONFIG_I2C_DEV_MAX_SIZE;
-		printk("Truncated write size to %d", CONFIG_I2C_DEV_MAX_SIZE);
+		LOG_ERROR("Truncated write size to %d", CONFIG_I2C_DEV_MAX_SIZE);
 	}
 
 	int ret = i2c_write(client->dev, write_buf, size, client->addr);
 	if (ret != 0)
 	{
-		printk("Write failed: %d (addr=0x%02X, len=%zu)",
+		LOG_ERROR("Write failed: %d (addr=0x%02X, len=%zu)",
 			   ret, client->addr, size);
 		return ret;
 	}
 
-	printk("I2C writing %zu bytes to device at address 0x%x", size, client->addr);
+	LOG_ERROR("I2C writing %zu bytes to device at address 0x%x", size, client->addr);
 	return size;
 }
 struct i2c_msg_linux
@@ -209,6 +215,7 @@ struct i2c_rdwr_ioctl_data
 static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 							 struct i2c_msg_linux *msgs)
 {
+	LOG_ERROR("i2cdev_ioctl_rdwr start----\n");
 	int i, res;
 
 	for (i = 0; i < nmsgs; i++)
@@ -231,12 +238,13 @@ static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 			break;
 		}
 	}
-
+	LOG_ERROR("i2cdev_ioctl_rdwr successful----\n");
 	return res;
 }
 
 static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list args)
 {
+	LOG_ERROR("i2cdev_ioctl start----\n");
 	struct i2c_device_info *client = zfp->filep;
 
 	if (!client)
@@ -289,78 +297,76 @@ static int i2cdev_mount(struct fs_mount_t *mountp)
 {
 	// 检查挂载点是否为空
     if (mountp->mnt_point == NULL) {
-        printk("Invalid mount point\n");
+        LOG_ERROR("Invalid mount point\n");
         return -EINVAL;
     }
 
     // 检查 I2C 设备是否就绪
-    // for (int i = 0; i < I2C_NUM; i++) {
-    //     if (!i2c_devices[i].dev || !device_is_ready(i2c_devices[i].dev)) {
-    //         printk("I2C device %d not ready\n", i);
-    //         return -ENODEV;
-    //     }
-    // }
+    for (int i = 0; i < I2C_NUM; i++) {
+        if (!device_is_ready(i2c_devices[i].dev)) {
+            LOG_ERROR("I2C device %d not ready\n", i);
+            return -ENODEV;
+        }
+    }
 
-	printk("I2C device mounted successfully\n");
+	LOG_ERROR("I2C device mounted successfully\n");
 	return 0;
 }
 static int i2cdev_unmount(struct fs_mount_t *mountp)
 {
     if (mountp->mnt_point == NULL) {
-        printk("Invalid mount point\n");
+        LOG_ERROR("Invalid mount point\n");
         return -EINVAL;
     }
 
 	mountp->mnt_point = NULL;
-	printk("I2C device unmounted successfully\n");
+	LOG_ERROR("I2C device unmounted successfully\n");
 	return 0;
 }
 
 static int i2cdev_opendir(struct fs_dir_t *dp, const char *path)
 {
     if (strcmp(path, I2C_MNT_POINT) != 0) {
-        printk("Invalid directory path\n");
+        LOG_ERROR("Invalid directory path\n");
         return -EINVAL;
     }
 
-    i2c_index = 0;
-    dp->dirp = (void *)(intptr_t)i2c_index;
+    dp->dirp = &i2c_index;
 
-	printk("I2C device opendir successfully\n");
+	LOG_ERROR("I2C device opendir successfully\n");
 	return 0;
 }
 
 static int i2cdev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 {
-	i2c_index = (int)(intptr_t)dp->dirp;
+	int *index = dp->dirp;
 
-    if (i2c_index < I2C_NUM) {
+    if (*index < I2C_NUM) {
         // 构造文件条目信息
         snprintf(entry->name, sizeof(entry->name), "%s", i2c_devices[i2c_index].label);
         entry->type = FS_DIR_ENTRY_FILE;
         entry->size = 0; // I2C 设备没有文件大小
-        i2c_index++;
-		dp->dirp = (void *)(intptr_t)i2c_index;
+        *index++;
         return 0;
     }
 
     // 没有更多条目
     memset(entry, 0, sizeof(struct fs_dirent));
-	printk("No more I2C devices to list\n");
+	LOG_ERROR("No more I2C devices to list\n");
     return 0;
 }
 
 static int i2cdev_closedir(struct fs_dir_t *dp)
 {
 	if (dp->dirp == NULL) {
-        printk("Error: NULL pointer passed to i2cdev_closedir\n");
+        LOG_ERROR("Error: NULL pointer passed to i2cdev_closedir\n");
         return -EINVAL;
     }
 
 	i2c_index = 0;
 	dp->dirp = NULL;
 
-	printk("I2C device closedir successfully\n");
+	LOG_ERROR("I2C device closedir successfully\n");
 	return 0;
 }
 
@@ -380,12 +386,12 @@ static int i2cdev_stat(struct fs_mount_t *mountp,
             entry->type = FS_DIR_ENTRY_FILE;
             entry->size = 0;
         } else {
-            printk("Invalid path\n");
+            LOG_ERROR("Invalid path\n");
             return -EINVAL;
         }
     }
 
-	printk("I2C device stat successfully\n");
+	LOG_ERROR("I2C device stat successfully\n");
 	return 0;
 }
 
@@ -407,21 +413,21 @@ static const struct fs_file_system_t i2cdev_fs = {
 
 static int i2c_dev_init(void)
 {
-	printk("i2c /dev entries driver\n");
+	LOG_ERROR("i2c /dev entries driver\n");
 
-	printk("i2c_num = %d\n", I2C_NUM);
+	LOG_ERROR("i2c_num = %d\n", I2C_NUM);
 
-	printk("i2c_devices[0].dev->name = %s\n", i2c_devices[0].dev->name);
+	LOG_ERROR("i2c_devices[0].dev->name = %s\n", i2c_devices[0].dev->name);
 
-	printk("i2c_devices[0].label = %s\n", i2c_devices[0].label);
+	LOG_ERROR("i2c_devices[0].label = %s\n", i2c_devices[0].label);
 
 	i2cfs_mnt.mnt_point = I2C_MNT_POINT;
-	printk("i2cfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n", i2cfs_mnt.type, i2cfs_mnt.mnt_point, i2cfs_mnt.fs_data);
+	LOG_ERROR("i2cfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n", i2cfs_mnt.type, i2cfs_mnt.mnt_point, i2cfs_mnt.fs_data);
 
 	int rc = fs_mount(&i2cfs_mnt);
 	if (rc != 0)
 	{
-		printk("Error mounting as i2cfs: %d", rc);
+		LOG_ERROR("Error mounting as i2cfs: %d", rc);
 		i2cfs_mnt.mnt_point = NULL;
 		return rc;
 	}
@@ -431,26 +437,26 @@ static int i2c_dev_init(void)
 
 static int i2c_init(void)
 {
-	printk("i2c_init----------start\n");
+	LOG_ERROR("i2c_init----------start\n");
 
 	int rc = fs_register(FS_I2C, &i2cdev_fs);
 	if (rc < 0)
 	{
-		printk("i2cfs register error (%d)\n", rc);
+		LOG_ERROR("i2cfs register error (%d)\n", rc);
 	}
 	else
 	{
-		printk("i2cfs fs registered\n");
+		LOG_ERROR("i2cfs fs registered\n");
 	}
 
 	rc = i2c_dev_init();
 	if (rc != 0)
 	{
-		printk("i2cfs init failed\n");
+		LOG_ERROR("i2cfs init failed\n");
 		return rc;
 	}
 
-	printk("i2c_init----------end\n");
+	LOG_ERROR("i2c_init----------end\n");
 	return rc;
 }
 
@@ -460,4 +466,4 @@ void i2c_main()
 }
 
 // 系统初始化
-SYS_INIT(i2c_init, POST_KERNEL, CONFIG_FILE_SYSTEM_INIT_PRIORITY);
+// SYS_INIT(i2c_init, POST_KERNEL, CONFIG_FILE_SYSTEM_INIT_PRIORITY);
