@@ -63,6 +63,14 @@ static struct fs_mount_t i2cfs_mnt = {
 	.fs_data = &i2c_devices,
 };
 
+static const char* getFileName(const char* filePath) {
+    const char* lastSlash = strrchr(filePath, '/');
+    if (lastSlash != NULL) {
+        return lastSlash + 1;
+    }
+    return filePath;
+}
+
 static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t mode)
 {
 	struct i2c_device_info *client = NULL;
@@ -70,7 +78,7 @@ static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t m
 	// 遍历所有 I2C 设备实例，找到对应的设备
 	for (size_t i = 0; i < I2C_NUM; i++)
 	{
-		if (strcmp(i2c_devices[i].label, file_name) == 0)
+		if (strcmp(i2c_devices[i].label, getFileName(file_name)) == 0)
 		{
 			client = &i2c_devices[i];
 			break;
@@ -339,7 +347,7 @@ static int i2cdev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
     // 没有更多条目
     memset(entry, 0, sizeof(struct fs_dirent));
 	printk("No more I2C devices to list\n");
-    return -ENOENT;
+    return 0;
 }
 
 static int i2cdev_closedir(struct fs_dir_t *dp)
