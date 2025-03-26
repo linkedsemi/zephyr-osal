@@ -17,7 +17,7 @@
 // 将函数返回类型改为 int
 int i2c_main_test()
 {
-    int file;
+    int file, file2;
     const char *file_name = "/dev/i2c-2";
     const char fru_data[] = "hello world!";
     uint8_t buffer[10];
@@ -25,12 +25,41 @@ int i2c_main_test()
     struct i2c_rdwr_ioctl_data rdwr;
     uint8_t test_buf[] = {'t', 'e', 's', 't'};
 
-    printk("----open test----\n");
+    // 第一次打开设备
+    printk("----open test 1----\n");
     file = open(file_name, O_RDWR | O_CLOEXEC);
     if (file < 0)
     {
         printk("Failed to open file: %d\n", file);
         return -1;
+    }
+    printk("Successfully opened file: %d\n", file);
+
+    // 尝试第二次打开同一个设备
+    printk("----open test 2 (should fail)----\n");
+    file2 = open(file_name, O_RDWR | O_CLOEXEC);
+    if (file2 < 0)
+    {
+        printk("Expected failure: Failed to open file 2: %d\n", file2);
+    }
+    else
+    {
+        printk("Unexpected success: Opened file 2: %d\n", file2);
+        close(file2);
+    }
+
+    // 关闭第一次打开文件，重新打开文件
+    close(file);
+    printk("----open test 2 (should success)----\n");
+    file2 = open(file_name, O_RDWR | O_CLOEXEC);
+    if (file2 < 0)
+    {
+        printk("Expected failure: Failed to open file 2: %d\n", file2);
+    }
+    else
+    {
+        printk("Unexpected success: Opened file 2: %d\n", file2);
+        close(file2);
     }
 
     // 设置从设备地址
