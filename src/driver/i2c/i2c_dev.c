@@ -12,7 +12,8 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/i2c.h>
-#include <zephyr/logging/log.h> 
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/atomic.h> 
 
 LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR);  // 注册日志模块
 
@@ -41,15 +42,15 @@ struct i2c_device_info
 	const struct device *dev;
 	const char* label;
 	uint16_t addr;
-	uint8_t opened;  //原子操作
+	atomic_t opened;  //原子操作
 };
 
 #define I2C_DEVICE_PROCESS(inst)                            \
     {                                                       \
         .dev = DEVICE_DT_GET(DT_INST(inst, DT_DRV_COMPAT)), \
-        .label = DT_INST_PROP(inst, label),                       \
+        .label = DT_INST_PROP(inst, label),                 \
         .addr = 0,                                          \
-        .opened = 0                                         \
+        .opened = ATOMIC_INIT(0)                            \
     },
 
 struct i2c_device_info i2c_devices[] = {
@@ -93,23 +94,21 @@ static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t m
         return -ENODEV;
     }
 
-	if (client->opened) {
+	if (!atomic_cas(&client->opened, 0, 1)) {
 		LOG_ERROR("device name is opened");
 		return -EINVAL;
 	}
 
-	client->opened = 1;
-
 	if (!device_is_ready(client->dev))
 	{
 		LOG_ERROR("Error: I2C device with name '%s' is not ready\n", file_name);
-		client->opened = 0;
+		atomic_set(&client->opened, 0);
 		return -ENODEV;
 	}
 
 	if (zfp->mp == NULL) {
         LOG_ERROR("Error: File system mount point is NULL\n");
-        client->opened = 0;
+        atomic_set(&client->opened, 0);
         return -EINVAL;
     }
 
@@ -123,6 +122,11 @@ static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t m
 static int i2cdev_close(struct fs_file_t *zfp)
 {
 	LOG_ERROR("i2cdev_close start----\n");
+	if (zfp->filep)
+    {
+        struct i2c_device_info *client = zfp->filep;
+        atomic_set(&client->opened, 0);
+    }
 	if (zfp->mp)
 	{
 		zfp->mp = NULL;
