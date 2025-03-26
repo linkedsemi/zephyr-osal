@@ -343,10 +343,10 @@ static int i2cdev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 
     if (*index < I2C_NUM) {
         // 构造文件条目信息
-        snprintf(entry->name, sizeof(entry->name), "%s", i2c_devices[i2c_index].label);
+        snprintf(entry->name, sizeof(entry->name), "%s", i2c_devices[*index].label);
         entry->type = FS_DIR_ENTRY_FILE;
         entry->size = 0; // I2C 设备没有文件大小
-        *index++;
+        (*index)++;
         return 0;
     }
 
