@@ -13,16 +13,22 @@
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/logging/log.h>
-#include <zephyr/sys/atomic.h> 
+#include <zephyr/sys/atomic.h>
+#include <driver/i2c/i2c_dev.h> 
 
 LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR);  // 注册日志模块
 
-#define I2C_SLAVE 0x0703 /* Use this slave address */
+// #define I2C_SLAVE 0x0703 /* Use this slave address */
 
-#define I2C_SLAVE_FORCE 0x0706 /* Use this slave address, even if it \
-				  is already in use by a driver! */
+// #define I2C_SLAVE_FORCE 0x0706 /* Use this slave address, even if it \
+// 				  is already in use by a driver! */
 
-#define I2C_RDWR 0x0707 /* Combined R/W transfer (one STOP only) */
+// #define I2C_FUNCS	0x0705	/* Get the adapter functionality mask */
+
+// #define I2C_RDWR 0x0707 /* Combined R/W transfer (one STOP only) */
+
+// #define I2C_PEC		0x0708	/* != 0 to use PEC with SMBus */
+// #define I2C_SMBUS	0x0720	/* SMBus transfer */
 
 #define CONFIG_I2C_DEV_MAX_SIZE 8192
 
@@ -37,13 +43,13 @@ LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR);  // 注册日志模块
 BUILD_ASSERT(I2C_NUM <= MAX_I2C_DEVICES,
 			 "Exceeded maximum I2C device count");
 
-struct i2c_device_info
-{
-	const struct device *dev;
-	const char* label;
-	uint16_t addr;
-	atomic_t opened;  //原子操作
-};
+// struct i2c_device_info
+// {
+// 	const struct device *dev;
+// 	const char* label;
+// 	uint16_t addr;
+// 	atomic_t opened;  //原子操作
+// };
 
 #define I2C_DEVICE_PROCESS(inst)                            \
     {                                                       \
@@ -198,23 +204,23 @@ static ssize_t i2cdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
 	LOG_ERROR("I2C writing %zu bytes to device at address 0x%x", size, client->addr);
 	return size;
 }
-struct i2c_msg_linux
-{
-	uint16_t addr;
-	uint8_t flags;
-	uint32_t len;
-	uint8_t *buf;
-};
-/* This is the structure as used in the I2C_RDWR ioctl call */
-struct i2c_rdwr_ioctl_data
-{
-	struct i2c_msg_linux *msgs; /* pointers to i2c_msgs */
-	uint32_t nmsgs;				/* number of i2c_msgs */
-};
+// struct i2c_msg_linux
+// {
+// 	uint16_t addr;
+// 	uint8_t flags;
+// 	uint32_t len;
+// 	uint8_t *buf;
+// };
+// /* This is the structure as used in the I2C_RDWR ioctl call */
+// struct i2c_rdwr_ioctl_data
+// {
+// 	struct i2c_msg_linux *msgs; /* pointers to i2c_msgs */
+// 	uint32_t nmsgs;				/* number of i2c_msgs */
+// };
 
-#define I2C_RDWR_IOCTL_MAX_MSGS 42
+// #define I2C_RDWR_IOCTL_MAX_MSGS 42
 
-#define I2C_SMBUS_BLOCK_MAX 32 /* As specified in SMBus standard */
+// #define I2C_SMBUS_BLOCK_MAX 32 /* As specified in SMBus standard */
 
 static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 							 struct i2c_msg_linux *msgs)
@@ -246,6 +252,17 @@ static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 	return res;
 }
 
+static inline uint32_t i2c_get_functionality(const struct device *dev)
+{
+    const struct i2c_driver_api *api = (const struct i2c_driver_api *)dev->api;
+
+    if (api) {
+        return I2C_FUNC_SMBUS_QUICK;
+    }
+
+    return 0;
+}
+
 static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list args)
 {
 	LOG_ERROR("i2cdev_ioctl start----\n");
@@ -261,6 +278,22 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 		client->addr = (uint16_t)(*(uint32_t *)args);
 		printf("Set address to 0x%02X", client->addr);
 		return 0;
+	case I2C_PEC:
+		/*
+		 * Setting the PEC flag here won't affect kernel drivers,
+		 * which will be using the i2c_client node registered with
+		 * the driver model core.  Likewise, when that client has
+		 * the PEC flag already set, the i2c-dev driver won't see
+		 * (or use) this setting.
+		 */
+		int arg = va_arg(args, int);
+		if (arg)
+			client->flags |= I2C_CLIENT_PEC;
+		else
+			client->flags &= ~I2C_CLIENT_PEC;
+		return 0;
+	case I2C_FUNCS:
+		return i2c_get_functionality(client->dev);
 	case I2C_RDWR:
 	{
 		struct i2c_rdwr_ioctl_data rdwr_arg;
