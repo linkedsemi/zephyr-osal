@@ -14,21 +14,9 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
-#include <driver/i2c/i2c_dev.h> 
+#include <driver/i2c/i2c_dev.h>
 
-LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR);  // 注册日志模块
-
-// #define I2C_SLAVE 0x0703 /* Use this slave address */
-
-// #define I2C_SLAVE_FORCE 0x0706 /* Use this slave address, even if it \
-// 				  is already in use by a driver! */
-
-// #define I2C_FUNCS	0x0705	/* Get the adapter functionality mask */
-
-// #define I2C_RDWR 0x0707 /* Combined R/W transfer (one STOP only) */
-
-// #define I2C_PEC		0x0708	/* != 0 to use PEC with SMBus */
-// #define I2C_SMBUS	0x0720	/* SMBus transfer */
+LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR); // 注册日志模块
 
 #define CONFIG_I2C_DEV_MAX_SIZE 8192
 
@@ -43,27 +31,17 @@ LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR);  // 注册日志模块
 BUILD_ASSERT(I2C_NUM <= MAX_I2C_DEVICES,
 			 "Exceeded maximum I2C device count");
 
-// struct i2c_device_info
-// {
-// 	const struct device *dev;
-// 	const char* label;
-// 	uint16_t addr;
-// 	atomic_t opened;  //原子操作
-// };
-
 #define I2C_DEVICE_PROCESS(inst)                            \
-    {                                                       \
-        .dev = DEVICE_DT_GET(DT_INST(inst, DT_DRV_COMPAT)), \
-        .label = DT_INST_PROP(inst, label),                 \
-        .addr = 0,                                          \
-        .opened = ATOMIC_INIT(0)                            \
-    },
+	{                                                       \
+		.dev = DEVICE_DT_GET(DT_INST(inst, DT_DRV_COMPAT)), \
+		.label = DT_INST_PROP(inst, label),                 \
+		.addr = 0,                                          \
+		.opened = ATOMIC_INIT(0)},
 
 struct i2c_device_info i2c_devices[] = {
 	DT_INST_FOREACH_STATUS_OKAY(I2C_DEVICE_PROCESS)};
 
 // struct i2c_device_info i2c_devices[I2C_NUM];
-
 
 static int i2c_index = 0; // 当前遍历的 I2C 设备索引
 
@@ -72,12 +50,14 @@ static struct fs_mount_t i2cfs_mnt = {
 	.fs_data = &i2c_devices,
 };
 
-static const char* getFileName(const char* filePath) {
-    const char* lastSlash = strrchr(filePath, '/');
-    if (lastSlash != NULL) {
-        return lastSlash + 1;
-    }
-    return filePath;
+static const char *getFileName(const char *filePath)
+{
+	const char *lastSlash = strrchr(filePath, '/');
+	if (lastSlash != NULL)
+	{
+		return lastSlash + 1;
+	}
+	return filePath;
 }
 
 static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t mode)
@@ -95,12 +75,14 @@ static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t m
 		}
 	}
 
-	if (client == NULL) {
-        LOG_ERROR("Error: I2C device with name '%s' not found\n", file_name);
-        return -ENODEV;
-    }
+	if (client == NULL)
+	{
+		LOG_ERROR("Error: I2C device with name '%s' not found\n", file_name);
+		return -ENODEV;
+	}
 
-	if (!atomic_cas(&client->opened, 0, 1)) {
+	if (!atomic_cas(&client->opened, 0, 1))
+	{
 		LOG_ERROR("device name is opened");
 		return -EINVAL;
 	}
@@ -112,11 +94,12 @@ static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t m
 		return -ENODEV;
 	}
 
-	if (zfp->mp == NULL) {
-        LOG_ERROR("Error: File system mount point is NULL\n");
-        atomic_set(&client->opened, 0);
-        return -EINVAL;
-    }
+	if (zfp->mp == NULL)
+	{
+		LOG_ERROR("Error: File system mount point is NULL\n");
+		atomic_set(&client->opened, 0);
+		return -EINVAL;
+	}
 
 	zfp->filep = client;
 	zfp->mp = &i2cfs_mnt;
@@ -129,10 +112,10 @@ static int i2cdev_close(struct fs_file_t *zfp)
 {
 	LOG_ERROR("i2cdev_close start----\n");
 	if (zfp->filep)
-    {
-        struct i2c_device_info *client = zfp->filep;
-        atomic_set(&client->opened, 0);
-    }
+	{
+		struct i2c_device_info *client = zfp->filep;
+		atomic_set(&client->opened, 0);
+	}
 	if (zfp->mp)
 	{
 		zfp->mp = NULL;
@@ -197,30 +180,13 @@ static ssize_t i2cdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
 	if (ret != 0)
 	{
 		LOG_ERROR("Write failed: %d (addr=0x%02X, len=%zu)",
-			   ret, client->addr, size);
+				  ret, client->addr, size);
 		return ret;
 	}
 
 	LOG_ERROR("I2C writing %zu bytes to device at address 0x%x", size, client->addr);
 	return size;
 }
-// struct i2c_msg_linux
-// {
-// 	uint16_t addr;
-// 	uint8_t flags;
-// 	uint32_t len;
-// 	uint8_t *buf;
-// };
-// /* This is the structure as used in the I2C_RDWR ioctl call */
-// struct i2c_rdwr_ioctl_data
-// {
-// 	struct i2c_msg_linux *msgs; /* pointers to i2c_msgs */
-// 	uint32_t nmsgs;				/* number of i2c_msgs */
-// };
-
-// #define I2C_RDWR_IOCTL_MAX_MSGS 42
-
-// #define I2C_SMBUS_BLOCK_MAX 32 /* As specified in SMBus standard */
 
 static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 							 struct i2c_msg_linux *msgs)
@@ -254,13 +220,14 @@ static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 
 static inline uint32_t i2c_get_functionality(const struct device *dev)
 {
-    const struct i2c_driver_api *api = (const struct i2c_driver_api *)dev->api;
+	const struct i2c_driver_api *api = (const struct i2c_driver_api *)dev->api;
 
-    if (api) {
-        return I2C_FUNC_SMBUS_QUICK;
-    }
+	if (api)
+	{
+		return I2C_FUNC_SMBUS_QUICK;
+	}
 
-    return 0;
+	return 0;
 }
 
 static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list args)
@@ -333,28 +300,32 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 static int i2cdev_mount(struct fs_mount_t *mountp)
 {
 	// 检查挂载点是否为空
-    if (mountp->mnt_point == NULL) {
-        LOG_ERROR("Invalid mount point\n");
-        return -EINVAL;
-    }
+	if (mountp->mnt_point == NULL)
+	{
+		LOG_ERROR("Invalid mount point\n");
+		return -EINVAL;
+	}
 
-    // 检查 I2C 设备是否就绪
-    for (int i = 0; i < I2C_NUM; i++) {
-        if (!device_is_ready(i2c_devices[i].dev)) {
-            LOG_ERROR("I2C device %d not ready\n", i);
-            return -ENODEV;
-        }
-    }
+	// 检查 I2C 设备是否就绪
+	for (int i = 0; i < I2C_NUM; i++)
+	{
+		if (!device_is_ready(i2c_devices[i].dev))
+		{
+			LOG_ERROR("I2C device %d not ready\n", i);
+			return -ENODEV;
+		}
+	}
 
 	LOG_ERROR("I2C device mounted successfully\n");
 	return 0;
 }
 static int i2cdev_unmount(struct fs_mount_t *mountp)
 {
-    if (mountp->mnt_point == NULL) {
-        LOG_ERROR("Invalid mount point\n");
-        return -EINVAL;
-    }
+	if (mountp->mnt_point == NULL)
+	{
+		LOG_ERROR("Invalid mount point\n");
+		return -EINVAL;
+	}
 
 	mountp->mnt_point = NULL;
 	LOG_ERROR("I2C device unmounted successfully\n");
@@ -363,12 +334,13 @@ static int i2cdev_unmount(struct fs_mount_t *mountp)
 
 static int i2cdev_opendir(struct fs_dir_t *dp, const char *path)
 {
-    if (strcmp(path, I2C_MNT_POINT) != 0) {
-        LOG_ERROR("Invalid directory path\n");
-        return -EINVAL;
-    }
+	if (strcmp(path, I2C_MNT_POINT) != 0)
+	{
+		LOG_ERROR("Invalid directory path\n");
+		return -EINVAL;
+	}
 
-    dp->dirp = &i2c_index;
+	dp->dirp = &i2c_index;
 
 	LOG_ERROR("I2C device opendir successfully\n");
 	return 0;
@@ -378,27 +350,29 @@ static int i2cdev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 {
 	int *index = dp->dirp;
 
-    if (*index < I2C_NUM) {
-        // 构造文件条目信息
-        snprintf(entry->name, sizeof(entry->name), "%s", i2c_devices[*index].label);
-        entry->type = FS_DIR_ENTRY_FILE;
-        entry->size = 0; // I2C 设备没有文件大小
-        (*index)++;
-        return 0;
-    }
+	if (*index < I2C_NUM)
+	{
+		// 构造文件条目信息
+		snprintf(entry->name, sizeof(entry->name), "%s", i2c_devices[*index].label);
+		entry->type = FS_DIR_ENTRY_FILE;
+		entry->size = 0; // I2C 设备没有文件大小
+		(*index)++;
+		return 0;
+	}
 
-    // 没有更多条目
-    memset(entry, 0, sizeof(struct fs_dirent));
+	// 没有更多条目
+	memset(entry, 0, sizeof(struct fs_dirent));
 	LOG_ERROR("No more I2C devices to list\n");
-    return 0;
+	return 0;
 }
 
 static int i2cdev_closedir(struct fs_dir_t *dp)
 {
-	if (dp->dirp == NULL) {
-        LOG_ERROR("Error: NULL pointer passed to i2cdev_closedir\n");
-        return -EINVAL;
-    }
+	if (dp->dirp == NULL)
+	{
+		LOG_ERROR("Error: NULL pointer passed to i2cdev_closedir\n");
+		return -EINVAL;
+	}
 
 	i2c_index = 0;
 	dp->dirp = NULL;
@@ -408,25 +382,31 @@ static int i2cdev_closedir(struct fs_dir_t *dp)
 }
 
 static int i2cdev_stat(struct fs_mount_t *mountp,
-	const char *path, struct fs_dirent *entry)
+					   const char *path, struct fs_dirent *entry)
 {
 	// 检查路径是否为挂载点
-    if (strcmp(path, I2C_MNT_POINT) == 0) {
-        // 挂载点是目录
-        entry->type = FS_DIR_ENTRY_DIR;
-        entry->size = 0;
-    } else {
-        // 检查是否为 I2C 设备路径
-        uint8_t minor;
-        if (sscanf(path, "i2c-%hhu", &minor) == 1 && minor < I2C_NUM) {
-            // 是 I2C 设备
-            entry->type = FS_DIR_ENTRY_FILE;
-            entry->size = 0;
-        } else {
-            LOG_ERROR("Invalid path\n");
-            return -EINVAL;
-        }
-    }
+	if (strcmp(path, I2C_MNT_POINT) == 0)
+	{
+		// 挂载点是目录
+		entry->type = FS_DIR_ENTRY_DIR;
+		entry->size = 0;
+	}
+	else
+	{
+		// 检查是否为 I2C 设备路径
+		uint8_t minor;
+		if (sscanf(path, "i2c-%hhu", &minor) == 1 && minor < I2C_NUM)
+		{
+			// 是 I2C 设备
+			entry->type = FS_DIR_ENTRY_FILE;
+			entry->size = 0;
+		}
+		else
+		{
+			LOG_ERROR("Invalid path\n");
+			return -EINVAL;
+		}
+	}
 
 	LOG_ERROR("I2C device stat successfully\n");
 	return 0;
@@ -441,11 +421,11 @@ static const struct fs_file_system_t i2cdev_fs = {
 	.read = i2cdev_read,   // 从 I2C 设备中读取数据并返回给用户空间
 	.write = i2cdev_write, // 将用户空间的数据写入到 I2C 设备
 	.lseek = NULL,
-	.ioctl = i2cdev_ioctl, // 增加ioctl
-	.opendir = i2cdev_opendir, // fs ls访问
-	.readdir = i2cdev_readdir, // fs ls访问
+	.ioctl = i2cdev_ioctl,		 // 增加ioctl
+	.opendir = i2cdev_opendir,	 // fs ls访问
+	.readdir = i2cdev_readdir,	 // fs ls访问
 	.closedir = i2cdev_closedir, // fs ls访问
-	.stat = i2cdev_stat, // fs cd访问
+	.stat = i2cdev_stat,		 // fs cd访问
 };
 
 static int i2c_dev_init(void)
@@ -497,10 +477,10 @@ static int i2c_init(void)
 	return rc;
 }
 
-void i2c_main()
-{
-	i2c_dev_init();
-}
+// void i2c_main()
+// {
+// 	i2c_dev_init();
+// }
 
 // 系统初始化
-// SYS_INIT(i2c_init, POST_KERNEL, CONFIG_FILE_SYSTEM_INIT_PRIORITY);
+SYS_INIT(i2c_init, POST_KERNEL, CONFIG_FILE_SYSTEM_INIT_PRIORITY);

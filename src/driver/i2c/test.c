@@ -62,6 +62,16 @@ int i2c_main_test()
         close(file2);
     }
 
+    // 重新打开文件，用于后续测试
+    printk("----open test file_name=%s----\n", file_name);
+    file = open(file_name, O_RDWR | O_CLOEXEC);
+    if (file < 0)
+    {
+        printk("Failed to open file: %d\n", file);
+        return -1;
+    }
+    printk("Successfully opened file: %d\n", file);
+
     // 设置从设备地址
     printk("----ioctl test----\n");
     int ret = ioctl(file, I2C_SLAVE, 0x50);
