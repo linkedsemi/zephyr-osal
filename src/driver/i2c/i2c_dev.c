@@ -22,8 +22,6 @@ LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR); // 注册日志模块
 
 #define MAX_I2C_DEVICES 14 /* The maximum number of I2C devices */
 
-#define I2C_MNT_POINT "/dev"
-
 #define DT_DRV_COMPAT linkedsemi_ls_i2c
 
 #define I2C_NUM DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)
@@ -418,7 +416,7 @@ static const struct fs_file_system_t i2cdev_fs = {
 	.unmount = i2cdev_unmount,
 	.open = i2cdev_open,
 	.close = i2cdev_close,
-	.read = i2cdev_read,   // 从 I2C 设备中读取数据并返回给用户空间
+	.read = i2cdev_read,   // 从 I2C 设备中读取数据
 	.write = i2cdev_write, // 将用户空间的数据写入到 I2C 设备
 	.lseek = NULL,
 	.ioctl = i2cdev_ioctl,		 // 增加ioctl

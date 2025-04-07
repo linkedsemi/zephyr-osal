@@ -15,3 +15,5 @@ struct i2c_device_info
 	atomic_t opened; // 原子操作
 	uint8_t flags;
 };
+
+#define I2C_MNT_POINT "/dev"
