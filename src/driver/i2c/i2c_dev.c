@@ -432,9 +432,15 @@ static int i2c_dev_init(void)
 
 	LOG_ERROR("i2c_num = %d\n", I2C_NUM);
 
-	LOG_ERROR("i2c_devices[0].dev->name = %s\n", i2c_devices[0].dev->name);
-
-	LOG_ERROR("i2c_devices[0].label = %s\n", i2c_devices[0].label);
+	// 输出i2c设备name和label信息
+	for (int i=0; i < I2C_NUM; i++){
+		if (i2c_devices[i].dev->name != NULL){
+			LOG_ERROR("i2c_devices[%d].dev->name = %s\n", i, i2c_devices[i].dev->name);
+		}
+		if (i2c_devices[i].label != NULL){
+			LOG_ERROR("i2c_devices[%d].label = %s\n", i, i2c_devices[i].label);
+		}
+	}
 
 	i2cfs_mnt.mnt_point = I2C_MNT_POINT;
 	LOG_ERROR("i2cfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n", i2cfs_mnt.type, i2cfs_mnt.mnt_point, i2cfs_mnt.fs_data);
