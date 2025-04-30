@@ -103,22 +103,38 @@ static struct fs_mount_t gpiofs_mnt = {
     .fs_data = &gpio_devices,
 };
 
-gpio_dev *state_pool[LINE_MAX] = {NULL}; // 初始化所有元素为 NULL
-
-int malloc_state(gpio_dev *dev)
+int malloc_state(struct gpio_dev *client, struct gpio_dev *dev)
 {
-    if (!dev) {
+    if (!client) {
         printf("Device pointer is NULL. Allocation failed.\n");
         return -1;
     }
 
-    for (int i = 0; i < LINE_MAX; i++) {
-        if (!state_pool[i]) {
-            state_pool[i] = dev;
-            printf("Allocated state %d for device type: %d\n", i, dev->type);
-            return i;
-        }
+    if (!dev) {
+        printf("Device pointer is NULL. Allocation failed.\n");
+        return -1;
     }
+    if (dev->type = LINEHANDLE) {
+        for (int i = 0; i < LINE_MAX; i++) {
+            if (!dev->gpio_union.linehandle.gdev) {
+                dev->gpio_union.linehandle.gdev = client->gpio_union.linehandle.gdev;
+                printf("Allocated state %d for device type: %d\n", i, dev->type);
+                return i;
+            }
+        }
+    } else if (dev->type = LINEEVT) {
+        for (int i = 0; i < LINEEVENT_MAX; i++) {
+            if (!dev->gpio_union.lineevent.gdev) {
+                dev->gpio_union.lineevent.gdev = client->gpio_union.lineevent.gdev;
+                printf("Allocated state %d for device type: %d\n", i, dev->type);
+                return i;
+            }
+        }        
+    } else {
+        printf("Allocated state %d for device type: %d\n", dev->type);
+        return -1; 
+    }
+
     printf("No available states in the pool.\n");
     return -1;
 }
@@ -240,11 +256,13 @@ static int gpiodev_close(struct fs_file_t *zfp)
         if (zfp->filep)
         {
             zfp->filep = NULL;
+            client->gpio_union.linehandle.gdev = NULL;
         }
     } else if (client->type == LINEEVT) {
         if (zfp->filep)
         {
             zfp->filep = NULL;
+            client->gpio_union.lineevent.gdev = NULL;
         }
     } else {
         return -EINVAL;
@@ -301,7 +319,10 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
                 return -EINVAL;
             }
            
-            int idx = malloc_state(linefd_dev);
+            int idx = malloc_state(client, linefd_dev);
+            if (idx < 0) {
+                return -EINVAL;
+            }
             char path[64];
             snprintf(path, sizeof(path), "/dev/gpio-linehandle%d", idx);
             linefd_dev[idx].gpio_union.linehandle.gdev = client->gpio_union.chip.gdev;
