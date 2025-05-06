@@ -16,4 +16,4 @@ struct i2c_device_info
 	uint8_t flags;
 };
 
-#define I2C_MNT_POINT "/dev"
+#define I2C_MNT_POINT "/dev/i2c"

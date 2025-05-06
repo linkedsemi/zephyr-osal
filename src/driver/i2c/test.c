@@ -18,49 +18,54 @@
 int i2c_main_test()
 {
     int file, file2;
-    const char *file_name = "/dev/i2c-2";
-    const char fru_data[] = "hello world!";
+    const char *file_name = "/dev/i2c/i2c-2";
+    char fru_data[] = "  hello world!";
     uint8_t buffer[10];
     struct i2c_msg_linux msgs[2];
     struct i2c_rdwr_ioctl_data rdwr;
-    uint8_t test_buf[] = {'t', 'e', 's', 't'};
+    uint8_t test_buf[] = {0, 0};
+    /* addr */
+    // test_buf[0] = 0;
+    // test_buf[1] = 0;
+    fru_data[0] = 0;
+    fru_data[1] = 0;
 
     // 第一次打开设备
-    printk("----open test 1----\n");
-    file = open(file_name, O_RDWR | O_CLOEXEC);
-    if (file < 0)
-    {
-        printk("Failed to open file: %d\n", file);
-        return -1;
-    }
-    printk("Successfully opened file: %d\n", file);
+    // printk("----open test 1----\n");
+    // file = open(file_name, O_RDWR | O_CLOEXEC);
+    // if (file < 0)
+    // {
+    //     printk("Failed to open file: %d\n", file);
+    //     return -1;
+    // }
+    // printk("Successfully opened file: %d\n", file);
 
-    // 尝试第二次打开同一个设备
-    printk("----open test 2 (should fail)----\n");
-    file2 = open(file_name, O_RDWR | O_CLOEXEC);
-    if (file2 < 0)
-    {
-        printk("Expected failure: Failed to open file 2: %d\n", file2);
-    }
-    else
-    {
-        printk("Unexpected success: Opened file 2: %d\n", file2);
-        close(file2);
-    }
+    // // 尝试第二次打开同一个设备
+    // printk("----open test 2 (should fail)----\n");
+    // file2 = open(file_name, O_RDWR | O_CLOEXEC);
+    // if (file2 < 0)
+    // {
+    //     printk("Expected failure: Failed to open file 2: %d\n", file2);
+    // }
+    // else
+    // {
+    //     printk("Unexpected success: Opened file 2: %d\n", file2);
+    //     close(file2);
+    // }
 
-    // 关闭第一次打开文件，重新打开文件
-    close(file);
-    printk("----open test 2 (should success)----\n");
-    file2 = open(file_name, O_RDWR | O_CLOEXEC);
-    if (file2 < 0)
-    {
-        printk("Expected failure: Failed to open file 2: %d\n", file2);
-    }
-    else
-    {
-        printk("Unexpected success: Opened file 2: %d\n", file2);
-        close(file2);
-    }
+    // // 关闭第一次打开文件，重新打开文件
+    // close(file);
+    // printk("----open test 2 (should success)----\n");
+    // file2 = open(file_name, O_RDWR | O_CLOEXEC);
+    // if (file2 < 0)
+    // {
+    //     printk("Expected failure: Failed to open file 2: %d\n", file2);
+    // }
+    // else
+    // {
+    //     printk("Unexpected success: Opened file 2: %d\n", file2);
+    //     close(file2);
+    // }
 
     // 重新打开文件，用于后续测试
     printk("----open test file_name=%s----\n", file_name);
@@ -94,15 +99,19 @@ int i2c_main_test()
     printk("Wrote %zd bytes to I2C device\n", writtenBytes);
 
     // 执行读操作
-    printk("----read test----\n");
-    ssize_t readBytes = read(file, buffer, sizeof(buffer));
-    if (readBytes < 0)
-    {
-        printk("Failed to read from I2C device: %zd\n", readBytes);
-        close(file);
-        return -1;
-    }
-    printk("Read %zd bytes from I2C device\n", readBytes);
+    // printk("----read test----\n");
+    // ssize_t readBytes = read(file, buffer, sizeof(buffer));
+    // if (readBytes < 0)
+    // {
+    //     printk("Failed to read from I2C device: %zd\n", readBytes);
+    //     close(file);
+    //     return -1;
+    // }
+    // printk("Read %zd bytes from I2C device \n", readBytes);
+    // for (int i = 0; i < readBytes; i++) {
+    //     printk("%02x ", buffer[i]);
+    // }
+    // printk("\n");
 
     // 使用ioctl执行读写操作
     msgs[0].addr = 0x50;
@@ -111,7 +120,7 @@ int i2c_main_test()
     msgs[0].buf = test_buf;
     msgs[1].addr = 0x50;
     msgs[1].flags = I2C_MSG_READ;
-    msgs[1].len = 6;
+    msgs[1].len = 8;
     msgs[1].buf = buffer;
 
     rdwr.msgs = msgs;

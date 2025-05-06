@@ -15,6 +15,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <driver/i2c/i2c_dev.h>
+#include <zephyr/sys/fdtable.h>
 
 LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR); // 注册日志模块
 
@@ -240,8 +241,11 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 	{
 	case I2C_SLAVE:
 	case I2C_SLAVE_FORCE:
-		client->addr = (uint16_t)(*(uint32_t *)args);
-		printf("Set address to 0x%02X", client->addr);
+		client->addr = (uint16_t)va_arg(args, uint32_t);
+		LOG_ERROR("Set address to 0x%02X", client->addr);
+		return 0;
+	case ZFD_IOCTL_SET_LOCK:
+		LOG_ERROR("ioctl ZFD_IOCTL_SET_LOCK----\n");
 		return 0;
 	case I2C_PEC:
 		/*
@@ -261,10 +265,17 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 		return i2c_get_functionality(client->dev);
 	case I2C_RDWR:
 	{
-		struct i2c_rdwr_ioctl_data rdwr_arg;
-		struct i2c_msg_linux *rdwr_pa;
+		LOG_ERROR("ioctl I2C_RDWR----\n");
+		
+		// rdwr_arg = va_arg(args, struct i2c_rdwr_ioctl_data);
+		struct i2c_rdwr_ioctl_data *rdwr_arg_ptr = va_arg(args, struct i2c_rdwr_ioctl_data *);
+		if (!rdwr_arg_ptr) {
+            return -EINVAL;
+        }
+        struct i2c_rdwr_ioctl_data rdwr_arg = *rdwr_arg_ptr;
+		// memcpy(&rdwr_arg, (struct i2c_rdwr_ioctl_data*)args, sizeof(rdwr_arg));
 
-		memcpy(&rdwr_arg, args, sizeof(rdwr_arg));
+		LOG_ERROR("rdwr_arg.msgs = %s, rdwr_arg.nmsgs=%d----\n", rdwr_arg.msgs[0].buf, rdwr_arg.nmsgs);
 
 		if (!rdwr_arg.msgs || rdwr_arg.nmsgs == 0)
 			return -EINVAL;
@@ -277,7 +288,7 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 			return -EINVAL;
 
 		size_t total_size = rdwr_arg.nmsgs * sizeof(struct i2c_msg_linux);
-		rdwr_pa = malloc(total_size);
+		struct i2c_msg_linux *rdwr_pa = malloc(total_size);
 		if (rdwr_pa == NULL)
 		{
 			return -ENOMEM;
@@ -314,7 +325,7 @@ static int i2cdev_mount(struct fs_mount_t *mountp)
 		}
 	}
 
-	LOG_ERROR("I2C device mounted successfully\n");
+	// LOG_ERROR("I2C device mounted successfully\n");
 	return 0;
 }
 static int i2cdev_unmount(struct fs_mount_t *mountp)
@@ -340,7 +351,7 @@ static int i2cdev_opendir(struct fs_dir_t *dp, const char *path)
 
 	dp->dirp = &i2c_index;
 
-	LOG_ERROR("I2C device opendir successfully\n");
+	// LOG_ERROR("I2C device opendir successfully\n");
 	return 0;
 }
 
@@ -360,7 +371,7 @@ static int i2cdev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 
 	// 没有更多条目
 	memset(entry, 0, sizeof(struct fs_dirent));
-	LOG_ERROR("No more I2C devices to list\n");
+	// LOG_ERROR("No more I2C devices to list\n");
 	return 0;
 }
 
