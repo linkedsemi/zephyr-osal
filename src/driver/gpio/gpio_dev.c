@@ -81,14 +81,14 @@ BUILD_ASSERT(GPIOCHIP_NUM <= MAX_GPIO_DEVICES,
 
 
 // 自动生成 GPIO 设备信息
-#define GPIO_DEVICE_PROCESS(inst)                \
-    {                                            \
-        .dev = DEVICE_DT_GET(DT_INST(inst, DT_DRV_COMPAT)), \ 
-        .label = DT_INST_PROP(inst, label),                 \     
-        .pin_count = DT_INST_PROP(inst, ngpios), \
-        .pin_mask = 0,                           \
-        .timestamp = 0,                          \
-        .opened = ATOMIC_INIT(0)},
+#define GPIO_DEVICE_PROCESS(inst)                            \
+	{                                                       \
+		.dev = DEVICE_DT_GET(DT_INST(inst, DT_DRV_COMPAT)), \
+		.label = DT_INST_PROP(inst, label),                 \
+		.pin_count = DT_INST_PROP(inst, ngpios),            \
+		.pin_mask = 0,                           \
+		.timestamp = 0,                                     \
+		.opened = ATOMIC_INIT(0)},
 
 struct gpio_device_info gpio_devices[] = {
     DT_INST_FOREACH_STATUS_OKAY(GPIO_DEVICE_PROCESS)};
@@ -106,36 +106,36 @@ static struct fs_mount_t gpiofs_mnt = {
 int malloc_state(struct gpio_dev *client, struct gpio_dev *dev)
 {
     if (!client) {
-        printf("Device pointer is NULL. Allocation failed.\n");
+        printk("Device pointer is NULL. Allocation failed.\n");
         return -1;
     }
 
     if (!dev) {
-        printf("Device pointer is NULL. Allocation failed.\n");
+        printk("Device pointer is NULL. Allocation failed.\n");
         return -1;
     }
-    if (dev->type = LINEHANDLE) {
+    if (dev->type == LINEHANDLE) {
         for (int i = 0; i < LINE_MAX; i++) {
             if (!dev->gpio_union.linehandle.gdev) {
                 dev->gpio_union.linehandle.gdev = client->gpio_union.linehandle.gdev;
-                printf("Allocated state %d for device type: %d\n", i, dev->type);
+                printk("Allocated state %d for device type: %d\n", i, dev->type);
                 return i;
             }
         }
-    } else if (dev->type = LINEEVT) {
+    } else if (dev->type == LINEEVT) {
         for (int i = 0; i < LINEEVENT_MAX; i++) {
             if (!dev->gpio_union.lineevent.gdev) {
                 dev->gpio_union.lineevent.gdev = client->gpio_union.lineevent.gdev;
-                printf("Allocated state %d for device type: %d\n", i, dev->type);
+                printk("Allocated state %d for device type: %d\n", i, dev->type);
                 return i;
             }
         }        
     } else {
-        printf("Allocated state %d for device type: %d\n", dev->type);
+        printk("Else device type: %d\n", dev->type);
         return -1; 
     }
 
-    printf("No available states in the pool.\n");
+    printk("No available states in the pool.\n");
     return -1;
 }
 
@@ -152,14 +152,69 @@ static const char *getFileName(const char *filePath)
     return filePath;
 }
 
+static int gpiodev_filename_check(const char *file_name, uint8_t *type, uint8_t *index) {
+    if (!file_name || strlen(file_name) == 0) {
+        printk("Invalid file name\n");
+        return -1; // 空指针或空字符串处理
+    }
+
+    // 情况 1: /dev/gpiochipX
+    if (strncmp(file_name, "/dev/gpiochip", 13) == 0) {
+        printk("Detected GPIO chip device: %s\n", file_name);
+        *index = -1;
+        // 进一步处理 GPIO 芯片设备
+        return 0;
+    }
+
+    // 情况 2: /dev/gpio-linehandle%d
+    if (strncmp(file_name, "/dev/gpio-linehandle", 20) == 0) {
+        // 提取数字索引
+        int idx = -1;
+        if (sscanf(file_name, "/dev/gpio-linehandle%d", &idx) == 1 && idx >= 0) {
+            *type = LINEHANDLE;
+            *index = idx;
+            printk("Detected GPIO line handle device with index: %d\n", idx);
+            // 进一步处理 GPIO 线路句柄设备
+            return 0;
+        } else {
+            printk("Invalid GPIO line handle format: %s\n", file_name);
+            return -1;
+        }
+    }
+
+    // 情况 3: /dev/gpio-lineevent%d
+    if (strncmp(file_name, "/dev/gpio-lineevent", 19) == 0) {
+        // 提取数字索引
+        int idx = -1;
+        if (sscanf(file_name, "/dev/gpio-lineevent%d", &idx) == 1 && idx >= 0) {
+            *type = LINEEVT;
+            *index = idx;
+            printk("Detected GPIO lineevent device with index: %d\n", idx);
+            // 进一步处理 GPIO 线路句柄设备
+            return 0;
+        } else {
+            printk("Invalid GPIO lineevent format: %s\n", file_name);
+            return -1;
+        }
+    }
+
+    // 其他情况
+    printk("Unknown file name format: %s\n", file_name);
+    return -1;
+}
+
 static int gpiodev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t mode)
 {
     LOG_ERROR("gpiodev_open start----\n"); 
 
-    struct gpio_dev *client = (struct gpio_dev *)zfp->filep;
+    uint8_t type = 0;
+    uint8_t idx = 0;
 
-    // todo 感觉这里还没有type信息呢，测试看看，不行的话就从filename中获取
-    int type = client->type;
+    // 判断 file_name 类型
+    if (gpiodev_filename_check(file_name, &type, &idx) == 0) {
+        printk("Type: %u, Index: %u\n", type, idx);
+    }
+
     if (type == GPIOCHIP) {
         struct  gpio_device_info *client = NULL;
 
@@ -199,7 +254,7 @@ static int gpiodev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t 
         int idx = -1;
         if (strncmp(file_name, "/dev/gpio-linehandle", 20) == 0) {            
             if (sscanf(file_name, "/dev/gpio-linehandle%d", &idx) == 1 && idx >= 0) {
-                printf("Detected GPIO line handle device with index: %d\n", idx);
+                printk("Detected GPIO line handle device with index: %d\n", idx);
             } else {
                 return -1;
             }
@@ -212,7 +267,7 @@ static int gpiodev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t 
         int idx = -1;
         if (strncmp(file_name, "/dev/gpio-lineevent", 19) == 0) {            
             if (sscanf(file_name, "/dev/gpio-lineevent%d", &idx) == 1 && idx >= 0) {
-                printf("Detected GPIO line event device with index: %d\n", idx);
+                printk("Detected GPIO line event device with index: %d\n", idx);
             } else {
                 return -1;
             }
@@ -235,7 +290,7 @@ static int gpiodev_close(struct fs_file_t *zfp)
     LOG_ERROR("gpiodev_close start----\n");
 
     if (!zfp || !zfp->filep) {
-        printf("No valid device to close.\n");
+        printk("No valid device to close.\n");
         return -EINVAL;
     }
 
@@ -613,6 +668,7 @@ static int gpio_init(void)
 int gpio_main()
 {
     gpio_init();
+    return 0;
 }
 
 // // 系统初始化
