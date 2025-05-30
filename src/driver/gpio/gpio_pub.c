@@ -9,7 +9,6 @@
 #include <zephyr/fs/fs_sys.h>
 #include <driver/gpio/gpio_dev.h>
 #include <zephyr/posix/poll.h>
-#include <zephyr/sys/printk.h>
 
 // 提取主设备号 暂时使用
 int major(dev_t dev)
