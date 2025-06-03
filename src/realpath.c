@@ -44,7 +44,7 @@ static int resolve_path(const char *path, char *resolved_path) {
             // 检查路径是否存在
             snprintf(temp_path, PATH_MAX, "%s/%s", resolved_path, token);
             if (fs_stat(temp_path, &entry) < 0) {
-                return -ENOENT;
+                //return -ENOENT;   // 路径不存在  暂时注释掉 WGP20250529
             }
 
             // 添加路径段
@@ -52,6 +52,8 @@ static int resolve_path(const char *path, char *resolved_path) {
             if (len > 0 && resolved_path[len - 1] != '/') {
                 strncat(resolved_path, "/", PATH_MAX - len - 1);
             }
+            if(len==0)
+            strcpy(resolved_path, "/");
             strncat(resolved_path, token, PATH_MAX - strlen(resolved_path) - 1);
         }
         token = strtok(NULL, "/");
