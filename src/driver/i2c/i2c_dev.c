@@ -12,6 +12,7 @@
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/drivers/smbus.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 #include <driver/i2c/i2c_dev.h>
@@ -21,7 +22,7 @@ LOG_MODULE_REGISTER(i2c_dev, LOG_LEVEL_ERR); // 注册日志模块
 
 #define CONFIG_I2C_DEV_MAX_SIZE 8192
 
-#define MAX_I2C_DEVICES 14 /* The maximum number of I2C devices */
+#define MAX_I2C_DEVICES 16 /* The maximum number of I2C devices */
 
 #define DT_DRV_COMPAT linkedsemi_ls_i2c
 
@@ -191,7 +192,7 @@ static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 							 struct i2c_msg_linux *msgs)
 {
 	LOG_ERROR("i2cdev_ioctl_rdwr start----\n");
-	int i, res;
+	int i, res, nmsgs_sent = 0;
 
 	for (i = 0; i < nmsgs; i++)
 	{
@@ -212,26 +213,165 @@ static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 		{
 			break;
 		}
+		nmsgs_sent++;
 	}
 	LOG_ERROR("i2cdev_ioctl_rdwr successful----\n");
-	return res;
+	return nmsgs_sent;
 }
 
-static inline uint32_t i2c_get_functionality(const struct device *dev)
+static unsigned long i2c_get_functionality(const struct device *dev)
 {
-	const struct i2c_driver_api *api = (const struct i2c_driver_api *)dev->api;
+	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL | I2C_FUNC_SMBUS_BLOCK_DATA;
+}
 
-	if (api)
-	{
-		return I2C_FUNC_SMBUS_QUICK;
+struct smbus_device_info {
+	const char* i2c_name;
+	const char* smbus_name;
+};
+
+static struct smbus_device_info smbus_devices[] = {
+	{"i2c-1", "smbus1"},
+	{"i2c-2", "smbus2"},
+	{"i2c-3", "smbus3"},
+	{"i2c-4", "smbus4"},
+	{"i2c-5", "smbus5"},
+	{"i2c-6", "smbus6"},
+	{"i2c-7", "smbus7"},
+	{"i2c-8", "smbus8"},
+	{"i2c-9", "smbus9"},
+	{"i2c-10", "smbus10"},
+	{"i2c-11", "smbus11"},
+	{"i2c-12", "smbus12"},
+	{"i2c-13", "smbus13"},
+	{"i2c-14", "smbus14"},
+	{"i2c-15", "smbus15"},
+	{"i2c-16", "smbus16"}
+};
+
+static const char* get_smbus_name(const struct device *dev){
+	const char *i2c_name = dev->name;
+	int count = ARRAY_SIZE(smbus_devices);
+
+	for(int i = 0; i < count; i++) {
+		if(strcmp(smbus_devices[i].i2c_name, i2c_name) == 0){
+            return smbus_devices[i].smbus_name;
+		}
 	}
 
-	return 0;
+	LOG_ERROR("No mapping found for device: %s\n", i2c_name);
+    return NULL;
+}
+
+static int i2cdev_ioctl_smbus(struct i2c_device_info *client, u8 read_write,
+                              u8 command, u32 size,
+                              union i2c_smbus_data *data)
+{
+	int res = 0;
+    if ((size != I2C_SMBUS_BYTE) && (size != I2C_SMBUS_QUICK) &&
+        (size != I2C_SMBUS_BYTE_DATA) && (size != I2C_SMBUS_WORD_DATA) &&
+        (size != I2C_SMBUS_PROC_CALL) && (size != I2C_SMBUS_BLOCK_DATA) &&
+        (size != I2C_SMBUS_I2C_BLOCK_BROKEN) &&
+        (size != I2C_SMBUS_I2C_BLOCK_DATA) &&
+        (size != I2C_SMBUS_BLOCK_PROC_CALL)) {
+        LOG_ERROR("size out of range (%x) in ioctl I2C_SMBUS.\n", size);
+        return -EINVAL;
+    }
+    if ((read_write != I2C_SMBUS_READ) && (read_write != I2C_SMBUS_WRITE)) {
+        LOG_ERROR("read_write out of range (%x) in ioctl I2C_SMBUS.\n", read_write);
+        return -EINVAL;
+    }
+
+	//获取smbus dev信息
+	const char* smbusName = get_smbus_name(client->dev);
+	if (smbusName == NULL)
+	{
+		return -EINVAL;
+	}
+	const struct device *smbus_dev = device_get_binding(smbusName);
+	if (!smbus_dev) {
+		LOG_ERROR("SMBus: Device %s not found", smbusName);
+		return -ENODEV;
+	}
+
+    switch (size) {
+    case I2C_SMBUS_QUICK:
+        res = smbus_quick(smbus_dev, client->addr, read_write);
+        break;
+    case I2C_SMBUS_BYTE:
+		if (read_write == I2C_SMBUS_WRITE) {
+            res = smbus_byte_write(smbus_dev, client->addr, command);
+        } else {
+            res = smbus_byte_read(smbus_dev, client->addr, &data->byte);
+			if (res >= 0) {
+				data->byte = (u8)res;
+			}
+        }
+        
+		// LOG_ERROR("SMBus: data->byte = %d", data->byte);
+        break;
+    case I2C_SMBUS_BYTE_DATA:
+        if (read_write == I2C_SMBUS_WRITE) {
+            res = smbus_byte_data_write(smbus_dev, client->addr, command, data->byte);
+        } else {
+            res = smbus_byte_data_read(smbus_dev, client->addr, command, &data->byte);
+            if (res >= 0) {
+                data->byte = (u8)res;
+            }
+        }
+        break;
+    case I2C_SMBUS_WORD_DATA:
+        if (read_write == I2C_SMBUS_WRITE) {
+            res = smbus_word_data_write(smbus_dev, client->addr, command, data->word);
+        } else {
+            res = smbus_word_data_read(smbus_dev, client->addr, command, &data->word);
+            if (res >= 0) {
+                data->word = (u16)res;
+            }
+        }
+        break;
+    // case I2C_SMBUS_PROC_CALL:
+    //     res = smbus_pcall(smbus_dev, client->addr, command, data->word, &data->word);
+    //     if (res >= 0) {
+    //         data->word = (u16)res;
+    //     }
+    //     break;
+    case I2C_SMBUS_BLOCK_DATA:
+    case I2C_SMBUS_I2C_BLOCK_DATA:
+		case_I2C_SMBUS_I2C_BLOCK_DATA:
+		// 需要基于i2ctransfer实现
+        if (read_write == I2C_SMBUS_WRITE) {
+            res = smbus_block_write(smbus_dev, client->addr, command, data->block[0], &data->block[1]);
+        } else {
+            res = smbus_block_read(smbus_dev, client->addr, command, &data->block[0], &data->block[1]);
+            if (res >= 0) {
+                data->block[0] = (u8)res;
+            }
+        }
+        break;
+    // case I2C_SMBUS_BLOCK_PROC_CALL:
+    //     res = smbus_block_pcall(smbus_dev, client->addr, command, data->block[0], &data->block[1]);
+    //     if (res >= 0) {
+    //         data->block[0] = (u8)res;
+    //     }
+    //     break;
+    case I2C_SMBUS_I2C_BLOCK_BROKEN:
+        // Convert old I2C block commands to the new convention.
+        size = I2C_SMBUS_I2C_BLOCK_DATA;
+        if (read_write == I2C_SMBUS_READ) {
+            data->block[0] = I2C_SMBUS_BLOCK_MAX;
+        }
+        goto case_I2C_SMBUS_I2C_BLOCK_DATA;
+    default:
+        LOG_ERROR("Unsupported SMBus size (%x) in ioctl I2C_SMBUS.\n", size);
+        return -EINVAL;
+    }
+
+    return res;
 }
 
 static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list args)
 {
-	LOG_ERROR("i2cdev_ioctl start----\n");
+	// LOG_ERROR("i2cdev_ioctl start----\n");
 	struct i2c_device_info *client = zfp->filep;
 
 	if (!client)
@@ -241,11 +381,12 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 	{
 	case I2C_SLAVE:
 	case I2C_SLAVE_FORCE:
+	
 		client->addr = (uint16_t)va_arg(args, uint32_t);
-		LOG_ERROR("Set address to 0x%02X", client->addr);
+		// LOG_ERROR("Set address to 0x%02X", client->addr);
 		return 0;
 	case ZFD_IOCTL_SET_LOCK:
-		LOG_ERROR("ioctl ZFD_IOCTL_SET_LOCK----\n");
+		// LOG_ERROR("ioctl ZFD_IOCTL_SET_LOCK----\n");
 		return 0;
 	case I2C_PEC:
 		/*
@@ -262,7 +403,11 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 			client->flags &= ~I2C_CLIENT_PEC;
 		return 0;
 	case I2C_FUNCS:
-		return i2c_get_functionality(client->dev);
+		 /* 获取第一个参数，类型为unsigned long* */
+        unsigned long *funcs = va_arg(args, unsigned long *);
+		/* 设置支持的功能 */
+		*funcs = i2c_get_functionality(client->dev);
+		return 0;
 	case I2C_RDWR:
 	{
 		LOG_ERROR("ioctl I2C_RDWR----\n");
@@ -275,7 +420,7 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
         struct i2c_rdwr_ioctl_data rdwr_arg = *rdwr_arg_ptr;
 		// memcpy(&rdwr_arg, (struct i2c_rdwr_ioctl_data*)args, sizeof(rdwr_arg));
 
-		LOG_ERROR("rdwr_arg.msgs = %s, rdwr_arg.nmsgs=%d----\n", rdwr_arg.msgs[0].buf, rdwr_arg.nmsgs);
+		// LOG_ERROR("rdwr_arg.msgs = %s, rdwr_arg.nmsgs=%d----\n", rdwr_arg.msgs[0].buf, rdwr_arg.nmsgs);
 
 		if (!rdwr_arg.msgs || rdwr_arg.nmsgs == 0)
 			return -EINVAL;
@@ -300,6 +445,17 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 		free(rdwr_pa);
 
 		return result;
+	}
+	case I2C_SMBUS: 
+	{
+		struct i2c_smbus_ioctl_data *data_arg_ptr = va_arg(args, struct i2c_smbus_ioctl_data *);
+		if (!data_arg_ptr) {
+            return -EINVAL;
+        }
+        struct i2c_smbus_ioctl_data data_arg = *data_arg_ptr;
+		return i2cdev_ioctl_smbus(client, data_arg.read_write,
+					  data_arg.command, data_arg.size,
+					  data_arg.data);
 	}
 	default:
 		return -ENOTTY;
