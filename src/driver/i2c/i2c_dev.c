@@ -302,9 +302,6 @@ static int i2cdev_ioctl_smbus(struct i2c_device_info *client, u8 read_write,
             res = smbus_byte_write(smbus_dev, client->addr, command);
         } else {
             res = smbus_byte_read(smbus_dev, client->addr, &data->byte);
-			if (res >= 0) {
-				data->byte = (u8)res;
-			}
         }
         
 		// LOG_ERROR("SMBus: data->byte = %d", data->byte);
@@ -314,9 +311,6 @@ static int i2cdev_ioctl_smbus(struct i2c_device_info *client, u8 read_write,
             res = smbus_byte_data_write(smbus_dev, client->addr, command, data->byte);
         } else {
             res = smbus_byte_data_read(smbus_dev, client->addr, command, &data->byte);
-            if (res >= 0) {
-                data->byte = (u8)res;
-            }
         }
         break;
     case I2C_SMBUS_WORD_DATA:
@@ -324,9 +318,6 @@ static int i2cdev_ioctl_smbus(struct i2c_device_info *client, u8 read_write,
             res = smbus_word_data_write(smbus_dev, client->addr, command, data->word);
         } else {
             res = smbus_word_data_read(smbus_dev, client->addr, command, &data->word);
-            if (res >= 0) {
-                data->word = (u16)res;
-            }
         }
         break;
     // case I2C_SMBUS_PROC_CALL:
@@ -343,9 +334,6 @@ static int i2cdev_ioctl_smbus(struct i2c_device_info *client, u8 read_write,
             res = smbus_block_write(smbus_dev, client->addr, command, data->block[0], &data->block[1]);
         } else {
             res = smbus_block_read(smbus_dev, client->addr, command, &data->block[0], &data->block[1]);
-            if (res >= 0) {
-                data->block[0] = (u8)res;
-            }
         }
         break;
     // case I2C_SMBUS_BLOCK_PROC_CALL:
