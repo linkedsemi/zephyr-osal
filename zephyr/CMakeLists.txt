@@ -9,6 +9,8 @@ if(CONFIG_ZEPHYR_OSAL)
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/kcs/kcs_dev.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/kcs/kcs_test.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/realpath.c
+            ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/eeprom/eeprom_dev.c
+            ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/eeprom/test.c
     )
     zephyr_library_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/)
 
