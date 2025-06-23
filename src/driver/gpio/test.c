@@ -6,7 +6,7 @@
 #define MAX_LINES 4
 
 // 测试：设置引脚电平 (GPIOHANDLE_SET_LINE_VALUES_IOCTL)
-void test_set_values(int handle_fd, unsigned int *values, int num_values)
+void test_set_values(int handle_fd, uint8_t *values, int num_values)
 {
     struct gpiohandle_data data;
 
@@ -14,16 +14,17 @@ void test_set_values(int handle_fd, unsigned int *values, int num_values)
         num_values = GPIOHANDLES_MAX;
 
     for (int i = 0; i < num_values; i++) {
+        printk("[TEST] before---%i, %u \n", i, values[i]);
         data.values[i] = values[i];
     }
 
     if (ioctl(handle_fd, GPIOHANDLE_SET_LINE_VALUES_IOCTL, &data) < 0) {
-        printk("[20250516]---Failed to GPIO_SET_LINEINFO_IOCTL failed-------\n");
+        printk("[TEST]---Failed to GPIO_SET_LINEINFO_IOCTL failed-------\n");
     }
 
-    printk("[20250516]Set GPIO values: \n");
+    printk("[TEST]Set GPIO values: \n");
     for (int i = 0; i < num_values; i++) {
-        printk("%u ", data.values[i]);
+        printk("[TEST] after---%i, %u \n", i, data.values[i]);
     }
 
     printk("\n");
@@ -77,9 +78,9 @@ int gpio_main_test()
 {
     printk("[TEST]----------start\n");
     
-    const char *file_name = "/dev/gpio/gpiochip0";
+    const char *file_name = "/dev/gpio/gpiochip4";
     int fd = open(file_name, O_RDWR | O_CLOEXEC);
-    printk("[TEST] file_name = [/dev/gpio/gpiochip0]-----fd=[%d]\n", fd);
+    printk("[TEST] file_name = [/dev/gpio/gpiochip4]-----fd=[%d]\n", fd);
     if (fd < 0) {
         printk("[TEST] ----Failed to open GPIO chip\n");
         return -1;
@@ -100,13 +101,13 @@ int gpio_main_test()
     printk("[TEST] Number of lines: %u\n", chipinfo.lines);
     printk("[TEST] ----GPIO_GET_CHIPINFO_IOCTL end\n");
 
-    sleep(5);
+    k_sleep(K_SECONDS(1));
     
     // 测试获取某个引脚信息（假设是 offset=0）
     printk("[TEST] ----GPIO_GET_LINEINFO_IOCTL start\n");
     struct gpioline_info lineinfo;
     memset(&lineinfo, 0, sizeof(lineinfo));
-    lineinfo.line_offset = 0;
+    lineinfo.line_offset = 2;
 
     if (ioctl(fd, GPIO_GET_LINEINFO_IOCTL, &lineinfo) < 0) {
         printk("[TEST] Failed to GPIO_GET_LINEINFO_IOCTL failed!\n");
@@ -120,14 +121,14 @@ int gpio_main_test()
     printk("[TEST] Consumer: %s\n", lineinfo.consumer);
     printk("[TEST] ----GPIO_GET_LINEINFO_IOCTL end\n");
 
-    sleep(5);
+    k_sleep(K_SECONDS(1));
     
     printk("[TEST] ----GPIO_GET_LINEHANDLE_IOCTL start\n");
    // 请求 GPIO 线句柄
    struct gpiohandle_request req;
    memset(&req, 0, sizeof(req));
-   req.lineoffsets[0] = 5; // 请求第 5 号引脚
-   req.lineoffsets[1] = 7; // 请求第 7 号引脚
+   req.lineoffsets[0] = 3;
+   req.lineoffsets[1] = 5;
    req.flags = GPIOHANDLE_REQUEST_OUTPUT; // 设置为输出模式
    req.default_values[0] = 0; // 默认值为低电平
    req.default_values[1] = 0; // 默认值为低电平
@@ -139,37 +140,38 @@ int gpio_main_test()
         return -1;
     }
     printk("[TEST]gpio_main_test----GPIO_GET_LINEHANDLE_IOCTL end\n");
+    k_sleep(K_SECONDS(1));
 
-    sleep(5);
+    printk("[TEST] ----test_set_config start\n");
 
-    printk("[TEST] ----GPIOHANDLE_SET_LINE_VALUES_IOCTL start\n");
     // 设置 GPIO 配置
-    unsigned int new_flags = GPIOHANDLE_REQUEST_INPUT; // 更改为输入模式
-    unsigned int new_default_values[] = {0, 0}; // 新的默认值
-    unsigned int offsets[] = {0, 1};
+    uint8_t values_on[] = {1, 1};
+    uint8_t values_off[] = {0, 0};
+    unsigned int offsets[] = {0, 0};
     int handle_fd = req.fd;
 
-    printk("[TEST] GPIOHANDLE_SET_LINE_VALUES_IOCTL handle_fd=[%d]\n", handle_fd);
-    unsigned int values_on[] = {1, 1};
-    unsigned int values_off[] = {0, 0};
 
-    printk("[TEST] -set high values_on start\n");
+    // 设置新的配置（例如输出模式）
+    test_set_config(handle_fd, offsets, 2, GPIO_OUTPUT, NULL);
+    k_sleep(K_SECONDS(1));
+
     // 设置高电平
     test_set_values(handle_fd, values_on, 2);
-    printk("[20250516]gpio_main_test----GPIOHANDLE_SET_LINE_VALUES_IOCTL end\n");
-    
-    sleep(5); // 延时一下看效果
+    k_sleep(K_SECONDS(1));
 
     // 读取当前值
-    printk("[TEST] GPIOHANDLE_GET_LINE_VALUES_IOCTL handle_fd=[%d]\n", handle_fd);
     test_get_values(handle_fd, 2);
+    k_sleep(K_SECONDS(1));
 
-    // 设置低电平
-    test_set_values(handle_fd, values_off, 2);    
-    sleep(5); // 延时一下看效果 
+    // // 设置新的配置（例如输出模式）
+    // test_set_config(handle_fd, offsets, 2, GPIO_OUTPUT, NULL);
 
-    // 设置新的配置（例如输入模式）
-    test_set_config(handle_fd, offsets, 2, GPIOHANDLE_REQUEST_INPUT, NULL);
+    // // 设置低电平
+    // test_set_values(handle_fd, values_off, 2);
+
+
+    // // 读取当前值
+    // test_get_values(handle_fd, 2);
 
     close(handle_fd);
     close(fd);
