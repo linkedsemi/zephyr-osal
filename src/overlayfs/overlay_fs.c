@@ -93,7 +93,7 @@ static void path_to_dir(char* path)
 
 static int create_directories(const char* path)
 {
-    char buffer[PATH_MAX]; 
+    char buffer[PATH_MAX];
     char* token;
     char* saveptr;
 
