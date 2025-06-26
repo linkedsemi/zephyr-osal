@@ -12,6 +12,8 @@ if(CONFIG_ZEPHYR_OSAL)
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/eeprom/eeprom_dev.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/eeprom/test.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/uart/uart_dev.c
+            ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/overlay_fs.c
+            ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/utils.c
     )
     zephyr_library_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/)
 
