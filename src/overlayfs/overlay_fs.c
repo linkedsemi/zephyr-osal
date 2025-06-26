@@ -1,9 +1,13 @@
-/*
- * Copyright (c) 2019 Bolt Innovation Management, LLC
- * Copyright (c) 2019 Peter Bigot Consulting, LLC
+/******************************************************************************
+ * Copyright 2024 Alibaba Group Corporation
  *
- * SPDX-License-Identifier: Apache-2.0
- */
+ * This software and the related documents are Alibaba copyrighted materials,
+ * and your use of them is governed by an express license which must be granted
+ * to you pursuant to a fully executed Agreement with Alibaba ("License").
+ * Unless the License provides otherwise, you may not use, modify, copy,
+ * publish, distribute, disclose or transmit this software or the related
+ * documents without Alibaba's prior written permission.
+ ******************************************************************************/
 
 #include "overlay_fs.h"
 

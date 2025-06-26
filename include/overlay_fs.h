@@ -1,3 +1,14 @@
+/******************************************************************************
+ * Copyright 2024 Alibaba Group Corporation
+ *
+ * This software and the related documents are Alibaba copyrighted materials,
+ * and your use of them is governed by an express license which must be granted
+ * to you pursuant to a fully executed Agreement with Alibaba ("License").
+ * Unless the License provides otherwise, you may not use, modify, copy,
+ * publish, distribute, disclose or transmit this software or the related
+ * documents without Alibaba's prior written permission.
+ ******************************************************************************/
+
 #pragma once
 #include <zephyr/kernel.h>
 #include <zephyr/fs/fs.h>
