@@ -303,8 +303,6 @@ static int i2cdev_ioctl_smbus(struct i2c_device_info *client, u8 read_write,
         } else {
             res = smbus_byte_read(smbus_dev, client->addr, &data->byte);
         }
-        
-		// LOG_ERROR("SMBus: data->byte = %d", data->byte);
         break;
     case I2C_SMBUS_BYTE_DATA:
         if (read_write == I2C_SMBUS_WRITE) {
@@ -327,13 +325,19 @@ static int i2cdev_ioctl_smbus(struct i2c_device_info *client, u8 read_write,
     //     }
     //     break;
     case I2C_SMBUS_BLOCK_DATA:
-    case I2C_SMBUS_I2C_BLOCK_DATA:
-		case_I2C_SMBUS_I2C_BLOCK_DATA:
-		// 需要基于i2ctransfer实现
+
         if (read_write == I2C_SMBUS_WRITE) {
             res = smbus_block_write(smbus_dev, client->addr, command, data->block[0], &data->block[1]);
         } else {
             res = smbus_block_read(smbus_dev, client->addr, command, &data->block[0], &data->block[1]);
+        }
+        break;
+    case I2C_SMBUS_I2C_BLOCK_DATA:
+		case_I2C_SMBUS_I2C_BLOCK_DATA:
+		 if (read_write == I2C_SMBUS_WRITE) {
+            res = i2c_burst_write(client->dev, client->addr, command, &data->block[1], data->block[0]);
+        } else {
+            res = i2c_write_read(client->dev, client->addr, &command, 1, &data->block[1], data->block[0]);
         }
         break;
     // case I2C_SMBUS_BLOCK_PROC_CALL:
@@ -369,7 +373,7 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 	{
 	case I2C_SLAVE:
 	case I2C_SLAVE_FORCE:
-	
+
 		client->addr = (uint16_t)va_arg(args, uint32_t);
 		// LOG_ERROR("Set address to 0x%02X", client->addr);
 		return 0;
