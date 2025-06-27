@@ -10,7 +10,8 @@
 struct eeprom_device_info
 {
 	const struct device *dev;
+	off_t offset;
 	atomic_t opened; // 原子操作
 };
 
-#define EEPROM_MNT_POINT "/sys/bus/i2c/device/2-0055"
+#define EEPROM_MNT_POINT "/sys/bus/i2c/device/2-0050"

@@ -137,7 +137,7 @@ static ssize_t eepromdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 		size = CONFIG_EEPROM_DEV_MAX_SIZE;
 	}
 
-	int ret = eeprom_read(client->dev, 0, (uint8_t *)ptr, size);
+	int ret = eeprom_read(client->dev, client->offset, (uint8_t *)ptr, size);
 	if (ret != 0)
 	{
 		LOG_ERROR("Read failed: %d", ret);
@@ -177,7 +177,7 @@ static ssize_t eepromdev_write(struct fs_file_t *zfp, const void *ptr, size_t si
 		LOG_ERROR("Truncated write size to %d", CONFIG_EEPROM_DEV_MAX_SIZE);
 	}
 
-	int ret = eeprom_write(client->dev, 0, write_buf, size);
+	int ret = eeprom_write(client->dev, client->offset, write_buf, size);
 	if (ret != 0)
 	{
 		LOG_ERROR("Write failed: %d (len=%zu)", ret, size);
@@ -186,6 +186,72 @@ static ssize_t eepromdev_write(struct fs_file_t *zfp, const void *ptr, size_t si
 
 	LOG_ERROR("EEPROM writing %zu bytes to device", size);
 	return size;
+}
+
+/**
+ * @brief EEPROM设备文件指针偏移操作
+ * @param fp 文件系统文件指针
+ * @param off 偏移量
+ * @param whence 偏移起始位置
+ * @return 0 成功，负数表示错误
+ */
+static int eepromdev_lseek(struct fs_file_t *fp, off_t off, int whence)
+{
+    if (fp == NULL) {
+        LOG_ERROR("Invalid file pointer (NULL)");
+        return -EINVAL;
+    }
+
+    struct eeprom_device_info *client = fp->filep;
+    if (client == NULL) {
+        LOG_ERROR("No client context");
+        return -EINVAL;
+    }
+
+    if (off < 0 || off >= CONFIG_EEPROM_DEV_MAX_SIZE) {
+        LOG_ERROR("Invalid offset value: %ld", off);
+        return -EINVAL;
+    }
+
+    switch (whence) {
+        case FS_SEEK_SET:
+			client->offset = off;
+			LOG_ERROR("Set offset to %ld", client->offset);
+            break;
+        case FS_SEEK_CUR:
+            LOG_ERROR("FS_SEEK_CUR is not supported for EEPROM");
+            return -EINVAL;
+        case FS_SEEK_END:
+            LOG_ERROR("FS_SEEK_END is not supported for EEPROM");
+            return -EINVAL;
+        default:
+            LOG_ERROR("Invalid whence value: %d", whence);
+            return -EINVAL;
+    }
+
+    LOG_ERROR("EEPROM lseek to offset: %ld", off);
+    return 0;
+}
+
+/**
+ * @brief 获取当前EEPROM文件指针位置
+ * @param fp 文件系统文件指针
+ * @return 当前文件位置偏移量，负数表示错误
+ */
+static off_t eepromdev_tell(struct fs_file_t *fp)
+{
+    if (fp == NULL) {
+        LOG_ERROR("Invalid file pointer (NULL)");
+        return -EINVAL;
+    }
+
+    struct eeprom_device_info *client = fp->filep;
+    if (client == NULL) {
+        LOG_ERROR("No client context");
+        return -EINVAL;
+    }
+
+    return client->offset;
 }
 
 /**
@@ -338,7 +404,8 @@ static const struct fs_file_system_t eepromdev_fs = {
 	.close = eepromdev_close,
 	.read = eepromdev_read,   // 从 EEPROM 设备中读取数据
 	.write = eepromdev_write, // 将用户空间的数据写入到 EEPROM 设备
-	.lseek = NULL,
+	.lseek = eepromdev_lseek,
+	.tell = eepromdev_tell,
 	.ioctl = NULL,
 	.opendir = eepromdev_opendir,	 // fs ls访问
 	.readdir = eepromdev_readdir,	 // fs ls访问
