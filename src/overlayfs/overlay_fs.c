@@ -769,7 +769,7 @@ int overlay_init(void)
     }
     else
     {
-        LOG_ERROR("overlayfs successfully registered\n");
+        LOG_INF("overlayfs successfully registered\n");
     }
 
     return rc;
