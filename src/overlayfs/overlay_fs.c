@@ -265,7 +265,7 @@ static int overlay_open(struct fs_file_t* fp, const char* path,
     }
     else if (check_file_exists(ro_path) == 0 &&
              check_file_exists(rw_path) != 0 &&
-             (zflags & (FS_O_WRITE | FS_O_TRUNC)))
+             (zflags & (FS_O_WRITE | FS_O_TRUNC | FS_O_CREATE)))
     {
         ret = fs_cp(ro_path, rw_path);
         if (ret)
@@ -285,7 +285,7 @@ static int overlay_open(struct fs_file_t* fp, const char* path,
     }
     else if (check_file_exists(ro_path) != 0 &&
              check_file_exists(rw_path) != 0 &&
-             (zflags & (FS_O_WRITE | FS_O_TRUNC)))
+             (zflags & (FS_O_WRITE | FS_O_TRUNC | FS_O_CREATE)))
     {
         char* dest_dir = strdup(rw_path);
         path_to_dir(dest_dir);
@@ -312,6 +312,7 @@ static int overlay_open(struct fs_file_t* fp, const char* path,
         }
     }
 
+    fs_unlock(data);
     return ret;
 }
 
@@ -598,7 +599,7 @@ static int overlay_readdir(struct fs_dir_t* dp, struct fs_dirent* entry)
         }
         else
         {
-            entry->name[0] = 0;
+            entry->name[0] = '\0';
         }
     }
 
