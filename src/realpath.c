@@ -21,40 +21,46 @@ static int resolve_path(const char *path, char *resolved_path) {
 
     // 处理相对路径
     if (path[0] != '/') {
-        // 获取当前工作目录（假设为根目录 "/"）
-        strcpy(resolved_path, "/");
+        resolved_path[0] = '/';
+        resolved_path[1] = '\0';
     }
 
     // 复制路径到临时缓冲区
-    strncpy(temp_path, path, PATH_MAX - 1);
-    temp_path[PATH_MAX - 1] = '\0';
+    strncpy(temp_path, path, sizeof(temp_path) - 1);
+    temp_path[sizeof(temp_path) - 1] = '\0';
 
     // 使用 strtok 分割路径
     token = strtok(temp_path, "/");
     while (token) {
         if (strcmp(token, ".") == 0) {
-            // 忽略 "."
+            // 忽略 "." 当前目录
         } else if (strcmp(token, "..") == 0) {
-            // 处理 ".."
+            // 处理 ".." 上级目录
             last_slash = strrchr(resolved_path, '/');
             if (last_slash && last_slash != resolved_path) {
                 *last_slash = '\0';
             }
         } else {
-            // 检查路径是否存在
-            snprintf(temp_path, PATH_MAX, "%s/%s", resolved_path, token);
+            // 构造临时路径进行检查
+            size_t len = strlen(resolved_path);
+            if (len + strlen(token) + 2 > PATH_MAX) {
+                return -ENAMETOOLONG; // 路径过长
+            }
+
+            snprintf(temp_path, sizeof(temp_path), "%s/%s", resolved_path, token);
             if (fs_stat(temp_path, &entry) < 0) {
-                //return -ENOENT;   // 路径不存在  暂时注释掉 WGP20250529
+                //return -ENOENT; // 路径不存在（暂时注释）
             }
 
             // 添加路径段
-            size_t len = strlen(resolved_path);
             if (len > 0 && resolved_path[len - 1] != '/') {
-                strncat(resolved_path, "/", PATH_MAX - len - 1);
+                strncat(resolved_path, "/", sizeof(resolved_path) - len - 1);
             }
-            if(len==0)
-            strcpy(resolved_path, "/");
-            strncat(resolved_path, token, PATH_MAX - strlen(resolved_path) - 1);
+            if (len == 0) {
+                resolved_path[0] = '/';
+                resolved_path[1] = '\0';
+            }
+            strncat(resolved_path, token, sizeof(resolved_path) - strlen(resolved_path) - 1);
         }
         token = strtok(NULL, "/");
     }
@@ -68,18 +74,16 @@ char* realpath(const char* path, char* resolved_path) {
         return NULL;
     }
 
-    // 如果 resolved_path 为 NULL，则动态分配内存
     char* allocated_path = NULL;
     if (!resolved_path) {
         resolved_path = malloc(PATH_MAX);
         if (!resolved_path) {
-            // 内存分配失败
             errno = ENOMEM;
             return NULL;
         }
-        allocated_path = resolved_path; // 记录动态分配的内存
+        allocated_path = resolved_path;
     } else {
-        // 确保 resolved_path 至少有 PATH_MAX 的空间
+        // 确保传入的 resolved_path 有足够空间
         if (strlen(resolved_path) >= PATH_MAX) {
             errno = ENAMETOOLONG;
             return NULL;
@@ -87,13 +91,11 @@ char* realpath(const char* path, char* resolved_path) {
     }
 
     if (resolve_path(path, resolved_path) < 0) {
-        // 解析失败，释放动态分配的内存（如果有）
         if (allocated_path) {
             free(allocated_path);
         }
         return NULL;
     }
 
-    // 如果 resolved_path 是动态分配的，返回时需要告知调用者
     return resolved_path;
 }
