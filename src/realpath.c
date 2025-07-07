@@ -54,13 +54,13 @@ static int resolve_path(const char *path, char *resolved_path) {
 
             // 添加路径段
             if (len > 0 && resolved_path[len - 1] != '/') {
-                strncat(resolved_path, "/", sizeof(resolved_path) - len - 1);
+                strncat(resolved_path, "/", PATH_MAX - len - 1);
             }
             if (len == 0) {
                 resolved_path[0] = '/';
                 resolved_path[1] = '\0';
             }
-            strncat(resolved_path, token, sizeof(resolved_path) - strlen(resolved_path) - 1);
+            strncat(resolved_path, token, PATH_MAX - strlen(resolved_path) - 1);
         }
         token = strtok(NULL, "/");
     }
