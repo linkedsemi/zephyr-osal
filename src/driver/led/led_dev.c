@@ -94,16 +94,19 @@ static int leddev_open(struct fs_file_t *zfp, const char *path, fs_mode_t mode)
 {
     LOG_ERROR("[LED_DEV] Opening file: %s", path);
 
+    static const size_t led_root_len = strlen("/sys/class/leds/");
     const char *led_root = "/sys/class/leds/";
-    if (strncmp(path, led_root, strlen(led_root)) != 0) {
+    
+    if (strncmp(path, led_root, led_root_len) != 0) {
         LOG_ERROR("[LED_DEV] Invalid path prefix");
         return -EINVAL;
     }
 
     /* parse path: /sys/class/leds/<led_name>/<attribute> */
-    const char *after_leds = path + strlen(led_root);
+    const char *after_leds = path + led_root_len;
     const char *slash = strchr(after_leds, '/');
-    if (!slash || slash == after_leds) {
+    
+    if (!slash || slash == after_leds || *(slash + 1) == '\0') {
         LOG_ERROR("[LED_DEV] Invalid path format");
         return -EINVAL;
     }
@@ -125,6 +128,11 @@ static int leddev_open(struct fs_file_t *zfp, const char *path, fs_mode_t mode)
             if (!led->led_dev || !device_is_ready(led->led_dev)) {
                 LOG_ERROR("[LED_DEV] LED device not ready");
                 return -ENODEV;
+            }
+
+            if (!attr_name || strlen(attr_name) == 0) {
+                LOG_ERROR("[LED_DEV] Empty attribute name");
+                return -EINVAL;
             }
 
             /* Checks if the property exists */
@@ -153,6 +161,11 @@ static int leddev_open(struct fs_file_t *zfp, const char *path, fs_mode_t mode)
 
 static int leddev_close(struct fs_file_t *zfp)
 {
+    if (!zfp) {
+        LOG_ERROR("[LED_DEV] Invalid file pointer");
+        return -EINVAL; // Assuming -EINVAL indicates invalid argument
+    }
+
     LOG_ERROR("[LED_DEV] Closing file");
 
     if (zfp->filep) {
@@ -228,6 +241,7 @@ static void blink_timer_handler(struct k_timer *timer)
     }
 
     /* Switch the LED state and set the next trigger time */ 
+    k_timer_stop(timer);  // Ensure clean restart
     if (led->is_led_on) {
         /* Now on, switch to off */ 
         ret = led_off(led->led_dev, led->channel);
@@ -313,8 +327,6 @@ static ssize_t leddev_write(struct fs_file_t *zfp, const void *data, size_t size
 {
     LOG_ERROR("[LED_DEV] Writing attribute start");
 
-    int ret = 0;
-
     if (!zfp->filep || !data || size == 0) {
         LOG_ERROR("[LED_DEV] Writing Invalid parameters");
         return -EINVAL;
@@ -332,15 +344,20 @@ static ssize_t leddev_write(struct fs_file_t *zfp, const void *data, size_t size
     buf[size] = '\0';
     
     /* Remove newline characters */
-    if (buf[strlen(buf) - 1] == '\n') {
-        buf[strlen(buf) - 1] = '\0';
+    size_t len = strlen(buf);
+    if (len > 0 && buf[len - 1] == '\n') {
+        buf[len - 1] = '\0';
     }
+
+    int ret = 0;
 
     if (strcmp(led->current_attr, "brightness") == 0) {
         LOG_ERROR("[LED_DEV] Writing brightness start");
-        unsigned long value = strtoul(buf, NULL, 10);
-        if (value > led->max_brightness) {
-            LOG_ERROR("[LED_DEV] Brightness value out of range");
+        char *endptr;
+        unsigned long value = strtoul(buf, &endptr, 10);
+        
+        if (endptr == buf || *endptr != '\0' || value > led->max_brightness) {
+            LOG_ERROR("[LED_DEV] Brightness value invalid or out of range");
             return -EINVAL;
         }
 
@@ -350,8 +367,16 @@ static ssize_t leddev_write(struct fs_file_t *zfp, const void *data, size_t size
             LOG_ERROR("[LED_DEV] led->led_dev == NULL");
             return -EINVAL;
         }
+        
+        // Prevent integer overflow
+        uint32_t scaled_value = (uint32_t)value * 100;
+        if (scaled_value / 100 != value) { // Check for overflow
+            LOG_ERROR("[LED_DEV] Value scaling caused overflow");
+            return -EINVAL;
+        }
+
         ret = led_set_brightness(led->led_dev, led->channel, 
-                                 (uint8_t)((value * 100) / led->max_brightness));
+                                 (uint8_t)(scaled_value / led->max_brightness));
         if (ret) {
             LOG_ERROR("[LED_DEV] Failed to set brightness: ret=[%d]", ret);
             return -EINVAL;
@@ -367,21 +392,40 @@ static ssize_t leddev_write(struct fs_file_t *zfp, const void *data, size_t size
         LOG_ERROR("[LED_DEV] write set trigger end");
     } else if (strcmp(led->current_attr, "delay_on") == 0) {
         LOG_ERROR("[LED_DEV] write set delay_on start");
-        led->delay_on = strtoul(buf, NULL, 10);
+        char *endptr;
+        led->delay_on = (uint32_t)strtoul(buf, &endptr, 10);
+        if (endptr == buf || *endptr != '\0') {
+            LOG_ERROR("[LED_DEV] Delay on value invalid");
+            return -EINVAL;
+        }
         LOG_ERROR("[LED_DEV] Set delay_on to %u ms", led->delay_on);
         if (led->trigger_active) {
             LOG_ERROR("[LED_DEV] write set delay_on timer");
-            set_led_trigger(led, "timer");
+            ret = set_led_trigger(led, "timer");
+            if (ret) {
+                LOG_ERROR("[LED_DEV] Failed to set trigger: %d", ret);
+                return -EINVAL;
+            }
         }
         LOG_ERROR("[LED_DEV] write set delay_on end");
     } else if (strcmp(led->current_attr, "delay_off") == 0) {
         LOG_ERROR("[LED_DEV] write set delay_off start");
-        led->delay_off = strtoul(buf, NULL, 10);
+        char *endptr;
+        led->delay_off = (uint32_t)strtoul(buf, &endptr, 10);
+        if (endptr == buf || *endptr != '\0') {
+            LOG_ERROR("[LED_DEV] Delay off value invalid");
+            return -EINVAL;
+        }
         LOG_ERROR("[LED_DEV] Set delay_off to %u ms", led->delay_off);
         if (led->trigger_active) {
             LOG_ERROR("[LED_DEV] write set delay_off timer");
-            set_led_trigger(led, "timer");
+            ret = set_led_trigger(led, "timer");
+            if (ret) {
+                LOG_ERROR("[LED_DEV] Failed to set trigger: %d", ret);
+                return -EINVAL;
+            }
         }
+        LOG_ERROR("[LED_DEV] write set delay_off end");
     } else {
         LOG_ERROR("[LED_DEV] write Unsupported attribute");
         return -EINVAL;
@@ -391,64 +435,67 @@ static ssize_t leddev_write(struct fs_file_t *zfp, const void *data, size_t size
 
 static int leddev_opendir(struct fs_dir_t *dp, const char *path)
 {
-    /* Only the root directory of the LED device is allowed to open */ 
-    if (strcmp(path, LED_MNT_POINT) != 0 && 
-        strcmp(path, LED_MNT_POINT "/") != 0) {
+    size_t mnt_len = strlen(LED_MNT_POINT);
+
+    /* Check if path matches LED_MNT_POINT or LED_MNT_POINT + '/' */
+    if (strncmp(path, LED_MNT_POINT, mnt_len) != 0 ||
+        (path[mnt_len] != '\0' && path[mnt_len] != '/')) {
         LOG_ERROR("[LED_DEV] Invalid directory path: %s", path);
         return -EINVAL;
     }
-    /* Points the directory pointer to the global index */ 
+
     dp->dirp = &led_index;
-    /* Reset the index each time the directory is opened */ 
     led_index = 0;
-    // LOG_ERROR("[LED_DEV] Opened LED directory: %s", path);
+
+    LOG_ERROR("[LED_DEV] Opened LED directory: %s", path);
     return 0;
 }
 
 static int leddev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 {
-    /* Get the current index pointer (same as i2cdev) */ 
+    /* Get the current index pointer */
     int *index = dp->dirp;
-    int total_entries = 0;
+    static int total_entries = -1;
     int current_entry = 0;
-    /* Calculate the total number of entries: the sum of the number of attributes for each LED device */
-    for (size_t i = 0; i < ARRAY_SIZE(led_instances); i++) {
-        if (led_instances[i].led_dev && device_is_ready(led_instances[i].led_dev)) {
-            for (int j = 0; led_attrs[j]; j++) {
-                total_entries++;
+
+    /* Calculate total number of entries only once */
+    if (total_entries == -1) {
+        total_entries = 0;
+        for (size_t i = 0; i < ARRAY_SIZE(led_instances); i++) {
+            if (led_instances[i].led_dev && device_is_ready(led_instances[i].led_dev)) {
+                for (int j = 0; led_attrs[j]; j++) {
+                    total_entries++;
+                }
             }
         }
     }
 
-    /* The index exceeds the total number of entries, returning empty (indicating the end of the traversal). */ 
+    /* End of traversal */
     if (*index >= total_entries) {
         memset(entry, 0, sizeof(struct fs_dirent));
         return 0;
     }
 
-    /* Iterate to find the entry at the current index */ 
+    /* Iterate over LED instances */
     for (size_t i = 0; i < ARRAY_SIZE(led_instances); i++) {
         struct led_file_data *led = &led_instances[i];
         
-        /* Skip the LED devices that are not ready */
         if (!led->led_dev || !device_is_ready(led->led_dev)) {
             continue;
         }
 
-        /* Iterate over all the attributes of the current LED */
         for (int j = 0; led_attrs[j]; j++) {
-            /* Find the entry for the current index */ 
             if (current_entry == *index) {
-                /* Construct the entry name in the "LED0/brightness" format */ 
-                snprintf(entry->name, sizeof(entry->name) - 1,
-                         "%s/%s", led->name, led_attrs[j]);
-                entry->name[sizeof(entry->name) - 1] = '\0';
-                entry->type = FS_DIR_ENTRY_FILE;
-                /* Refer to i2cdev implementation, set to 0 temporarily */
-                entry->size = 0;
+                int len = snprintf(entry->name, sizeof(entry->name),
+                                   "%s/%s", led->name, led_attrs[j]);
 
-                // LOG_ERROR("[LED_DEV] Listed entry: %s (index: %d)", 
-                //           entry->name, *index);
+                if (len >= (int)sizeof(entry->name)) {
+                    // Optional: log truncation warning
+                    LOG_ERROR("[LED_DEV] Entry name truncated: %s/%s", led->name, led_attrs[j]);
+                }
+
+                entry->type = FS_DIR_ENTRY_FILE;
+                entry->size = 0;
                 (*index)++;
                 return 0;
             }
@@ -456,7 +503,7 @@ static int leddev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
         }
     }
 
-    /* No more entries */ 
+    /* Unexpected case: invalid index */
     memset(entry, 0, sizeof(struct fs_dirent));
     return 0;
 }
@@ -466,8 +513,13 @@ static int leddev_closedir(struct fs_dir_t *dp)
     LOG_ERROR("[LED_DEV] Closed LED directory");
     /* Resetting the index */ 
     led_index = 0;
+    if (dp->dirp) {
+        dp->dirp = NULL;
+    }
     return 0;
 }
+
+#define LED_ATTR_FILE_SIZE 4
 
 static int leddev_stat(struct fs_mount_t *mountp, const char *path, struct fs_dirent *entry)
 {
@@ -482,17 +534,18 @@ static int leddev_stat(struct fs_mount_t *mountp, const char *path, struct fs_di
         return 0;
     }
 
-    /* Processing properties file (/sys/class/leds/LED0/* ... */
+    /* Resolve root path prefix */
     const char *led_root_slash = LED_MNT_POINT "/";
-    if (strncmp(path, led_root_slash, strlen(led_root_slash)) != 0) {
+    size_t led_root_len = strlen(led_root_slash);
+
+    if (strncmp(path, led_root_slash, led_root_len) != 0) {
         LOG_ERROR("[LED_DEV] Path does not start with %s", led_root_slash);
         return -EINVAL;
     }
 
-    /* Resolve LED names and attributes */ 
-    const char *after_leds = path + strlen(led_root_slash);
+    const char *after_leds = path + led_root_len;
     const char *slash = strchr(after_leds, '/');
-    if (!slash) {
+    if (!slash || slash == after_leds) { // Prevent empty led_name
         LOG_ERROR("[LED_DEV] Invalid path format");
         return -EINVAL;
     }
@@ -504,24 +557,37 @@ static int leddev_stat(struct fs_mount_t *mountp, const char *path, struct fs_di
     /* Find matching LED devices and attributes */ 
     for (size_t i = 0; i < ARRAY_SIZE(led_instances); i++) {
         struct led_file_data *led = &led_instances[i];
-        if (strncmp(led->name, led_name, led_name_len) == 0 &&
-            strlen(led->name) == led_name_len &&
-            led->led_dev && device_is_ready(led->led_dev)) {
 
-            for (int j = 0; led_attrs[j]; j++) {
-                if (strcmp(attr_name, led_attrs[j]) == 0) {
-                    entry->type = FS_DIR_ENTRY_FILE;
-                    /* Fixed size, refer to i2cdev */
-                    entry->size = 4;
-                    return 0;
-                }
-            }
-            return -ENOENT;
+        if (led->name == NULL || led->led_dev == NULL || !device_is_ready(led->led_dev)) {
+            continue;
         }
+
+        if (strlen(led->name) != led_name_len) {
+            continue;
+        }
+
+        if (strncmp(led->name, led_name, led_name_len) != 0) {
+            continue;
+        }
+
+        for (int j = 0; led_attrs[j]; j++) {
+            if (strcmp(attr_name, led_attrs[j]) == 0) {
+                entry->type = FS_DIR_ENTRY_FILE;
+                entry->size = LED_ATTR_FILE_SIZE;
+                return 0;
+            }
+        }
+
+        return -ENOENT;
     }
 
     return -ENOENT;
 }
+
+/* Configuration constants */
+#define LED_DEFAULT_MAX_BRIGHTNESS    100
+#define LED_DEFAULT_DELAY_ON_MS       500
+#define LED_DEFAULT_DELAY_OFF_MS      500
 
 static int leddev_mount(struct fs_mount_t *mountp)
 {
@@ -533,9 +599,10 @@ static int leddev_mount(struct fs_mount_t *mountp)
     }
 
     /* Initialize all LED devices */ 
-    size_t device_count = ARRAY_SIZE(led_devices);
-    LOG_ERROR("[LED_DEV] device_count[%d]", device_count) ;
-    for (size_t i = 0; i < ARRAY_SIZE(led_devices); i++) {
+    const size_t device_count = ARRAY_SIZE(led_devices);
+    LOG_ERROR("[LED_DEV] device_count[%zu]", device_count);
+
+    for (size_t i = 0; i < device_count; i++) {
         struct led_file_data *led = &led_instances[i];
         struct led_device_info *dev_info = &led_devices[i]; 
 
@@ -546,21 +613,23 @@ static int leddev_mount(struct fs_mount_t *mountp)
 
 		if (!device_is_ready(dev_info->dev))
 		{
-            LOG_ERROR("[LED_DEV] LED%d device not ready: %s", i, dev_info->label);
+            LOG_ERROR("[LED_DEV] LED%zu device not ready: %s", i, dev_info->label);
             continue;
 		}
 
-        led->led_dev = dev_info->dev;
-        led->name = dev_info->label;
-        led->channel = 0;
-        led->max_brightness = 100;
-        led->brightness = 0;
-        led->delay_on = 500;
-        led->delay_off = 500;
-        led->trigger_active = false;
-        led->is_led_on = false;
+        *led = (struct led_file_data){
+            .led_dev = dev_info->dev,
+            .name = dev_info->label,
+            .channel = 0,
+            .max_brightness = LED_DEFAULT_MAX_BRIGHTNESS,
+            .brightness = 0,
+            .delay_on = LED_DEFAULT_DELAY_ON_MS,
+            .delay_off = LED_DEFAULT_DELAY_OFF_MS,
+            .trigger_active = false,
+            .is_led_on = false,
+        };
 
-        /* Initialize the flashing timer */ 
+        /* Re-initialize only if necessary in production code */
         k_timer_init(&led->blink_timer, blink_timer_handler, NULL);
         led->blink_timer.user_data = led;
 
