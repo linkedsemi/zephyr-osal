@@ -217,11 +217,9 @@ static void blink_timer_handler(struct k_timer *timer) {
 
   struct led_file_data *led = (struct led_file_data *)timer->user_data;
 
-  /* Check device status, trigger mode, and brightness */
-  if (!led->trigger_active || !led->led_dev || !device_is_ready(led->led_dev) ||
-      led->brightness == 0) {
-    LOG_ERROR("[LED_DEV] Blink stopped (device not ready/trigger "
-              "inactive/brightness 0)");
+  /* Check device status and trigger mode */
+  if (!led->trigger_active || !led->led_dev || !device_is_ready(led->led_dev)) {
+    LOG_ERROR("[LED_DEV] Blink stopped (device not ready/trigger inactive)");
     led->trigger_active = false;
     k_timer_stop(timer);
     /* Make sure the LED is off */
@@ -236,7 +234,7 @@ static void blink_timer_handler(struct k_timer *timer) {
     /* Now on, switch to off */
     ret = led_off(led->led_dev, led->channel);
     if (ret != 0) {
-      LOG_ERROR("[LED_DEV] brightness = 0, led on fail, ret=[%d]", ret);
+      LOG_ERROR("[LED_DEV] Failed to turn LED off, ret=[%d]", ret);
     }
     led->is_led_on = false;
     /* Set the duration of the next firing (extinction) */
@@ -247,7 +245,7 @@ static void blink_timer_handler(struct k_timer *timer) {
     /* Now off, switch to on */
     ret = led_on(led->led_dev, led->channel);
     if (ret != 0) {
-      LOG_ERROR("[LED_DEV] brightness = 0, led on fail, ret=[%d]", ret);
+      LOG_ERROR("[LED_DEV] Failed to turn LED on, ret=[%d]", ret);
     }
     led->is_led_on = true;
     /* Set the next trigger (duration of light) */
@@ -267,21 +265,17 @@ static int set_led_trigger(struct led_file_data *led, const char *trigger) {
   }
 
   if (strcmp(trigger, "timer") == 0) {
-    /* Enable blinking mode (only if brightness is greater than 0) */
-    if (led->brightness > 0) {
-      led->trigger_active = true;
-      /* The initial state is off */
-      led->is_led_on = false;
-      ret = led_off(led->led_dev, led->channel);
-      if (ret != 0) {
-        LOG_ERROR("[LED_DEV] brightness > 0, led off fail, ret=[%d]", ret);
-      }
-      k_timer_start(&led->blink_timer, K_MSEC(led->delay_on), K_NO_WAIT);
-      LOG_ERROR("[LED_DEV] Blink started (on=%u ms, off=%u ms)", led->delay_on,
-                led->delay_off);
-    } else {
-      LOG_ERROR("[LED_DEV] Blink not started: brightness is 0");
+    /* Enable blinking mode */
+    led->trigger_active = true;
+    /* The initial state is off */
+    led->is_led_on = false;
+    ret = led_off(led->led_dev, led->channel);
+    if (ret != 0) {
+      LOG_ERROR("[LED_DEV] Failed to initialize LED state, ret=[%d]", ret);
     }
+    k_timer_start(&led->blink_timer, K_MSEC(led->delay_on), K_NO_WAIT);
+    LOG_ERROR("[LED_DEV] Blink started (on=%u ms, off=%u ms)", led->delay_on,
+              led->delay_off);
     return 0;
   } else if (strcmp(trigger, "none") == 0) {
     /* Turn off the blink mode and set the state according to the brightness */
@@ -292,7 +286,7 @@ static int set_led_trigger(struct led_file_data *led, const char *trigger) {
       /* When the brightness is greater than 0, it is kept constant */
       ret = led_on(led->led_dev, led->channel);
       if (ret != 0) {
-        LOG_ERROR("[LED_DEV] brightness > 0, led on fail, ret=[%d]", ret);
+        LOG_ERROR("[LED_DEV] Failed to turn LED on, ret=[%d]", ret);
       }
       led->is_led_on = true;
       LOG_ERROR("[LED_DEV] Set to constant on (brightness=%u)",
@@ -301,7 +295,7 @@ static int set_led_trigger(struct led_file_data *led, const char *trigger) {
       /* When the brightness is equal to 0, it stays off */
       ret = led_off(led->led_dev, led->channel);
       if (ret != 0) {
-        LOG_ERROR("[LED_DEV] brightness = 0, led off fail, ret=[%d]", ret);
+        LOG_ERROR("[LED_DEV] Failed to turn LED off, ret=[%d]", ret);
       }
       led->is_led_on = false;
       LOG_ERROR("[LED_DEV] Set to constant off");
@@ -628,6 +622,8 @@ static int leddev_mount(struct fs_mount_t *mountp) {
   return 0;
 }
 
+static int leddev_truncate(struct fs_file_t *zfp, off_t length) { return 0; }
+
 static int leddev_unmount(struct fs_mount_t *mountp) {
   LOG_ERROR("[LED_DEV] leddev_unmount start");
   int ret = 0;
@@ -672,6 +668,7 @@ static const struct fs_file_system_t leddev_fs = {
     .readdir = leddev_readdir,
     .closedir = leddev_closedir,
     .stat = leddev_stat,
+    .truncate = leddev_truncate,
 };
 
 /* Initialization functions */
