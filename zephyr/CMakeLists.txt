@@ -1,6 +1,7 @@
 if(CONFIG_ZEPHYR_OSAL)
     zephyr_library_named(zephyr-osal)
     zephyr_library_sources(
+
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/i2c/i2c_dev.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/i2c/test.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/gpio/gpio_pub.c
@@ -10,6 +11,7 @@ if(CONFIG_ZEPHYR_OSAL)
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/kcs/kcs_test.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/led/led_dev.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/led/test.c
+            ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/random/random.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/realpath.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/eeprom/eeprom_dev.c
             ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/eeprom/test.c
