@@ -455,7 +455,7 @@ static int overlay_mkdir(struct fs_mount_t* mountp, const char* path)
         return rc;
     }
 
-    rc = fs_mkdir(rw_path);
+    rc = create_directories(rw_path);
     fs_unlock(data);
     return rc;
 }
