@@ -259,6 +259,7 @@ static int overlay_open(struct fs_file_t* fp, const char* path,
         ret = fs_open(fp, rw_path, zflags);
         if (ret)
         {
+            LOG_ERROR("Failed to open %s(%d)", rw_path, ret);
             fs_unlock(data);
             return ret;
         }
@@ -279,6 +280,7 @@ static int overlay_open(struct fs_file_t* fp, const char* path,
         ret = fs_open(fp, rw_path, zflags);
         if (ret)
         {
+            LOG_ERROR("Failed to open %s(%d)", rw_path, ret);
             fs_unlock(data);
             return ret;
         }
@@ -298,6 +300,7 @@ static int overlay_open(struct fs_file_t* fp, const char* path,
         ret = fs_open(fp, rw_path, zflags);
         if (ret)
         {
+            LOG_ERROR("Failed to open %s(%d)", rw_path, ret);
             fs_unlock(data);
             return ret;
         }
@@ -307,6 +310,7 @@ static int overlay_open(struct fs_file_t* fp, const char* path,
         ret = fs_open(fp, ro_path, zflags);
         if (ret)
         {
+            LOG_ERROR("Failed to open %s(%d)", ro_path, ret);
             fs_unlock(data);
             return ret;
         }
