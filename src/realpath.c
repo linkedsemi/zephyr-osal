@@ -1,7 +1,9 @@
+#include <assert.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/unistd.h>
 #include <zephyr/fs/fs.h>
 
 #define PATH_MAX 256
@@ -18,12 +20,27 @@ static int resolve_path(const char* path, char* resolved_path)
         return -EINVAL;
     }
 
-    // 初始化绝对路径
-    resolved_path[0] = '\0';
-
-    // 处理相对路径
     if (path[0] != '/')
     {
+        // 处理相对路径
+        if (getcwd(resolved_path, PATH_MAX) == NULL)
+        {
+            return -errno;
+        }
+        // 确保路径以 '/' 结尾，便于后续处理
+        size_t len = strlen(resolved_path);
+        if (len > 0 && resolved_path[len - 1] != '/')
+        {
+            if (len + 1 < PATH_MAX)
+            {
+                resolved_path[len] = '/';
+                resolved_path[len + 1] = '\0';
+            }
+        }
+    }
+    else
+    {
+        // 处理绝对路径
         resolved_path[0] = '/';
         resolved_path[1] = '\0';
     }
@@ -47,37 +64,58 @@ static int resolve_path(const char* path, char* resolved_path)
             if (last_slash && last_slash != resolved_path)
             {
                 *last_slash = '\0';
+                last_slash = strrchr(resolved_path, '/');
+                if (last_slash)
+                {
+                    *(last_slash + 1) = '\0';
+                }
+                else
+                {
+                    // 恢复
+                    resolved_path[0] = '/';
+                    resolved_path[1] = '\0';
+                }
             }
         }
         else
         {
-            // 构造临时路径进行检查
-            size_t len = strlen(resolved_path);
-            if (len + strlen(token) + 2 > PATH_MAX)
-            {
-                return -ENAMETOOLONG; // 路径过长
-            }
+            // 处理普通目录名
+            size_t resolved_len = strlen(resolved_path);
+            size_t token_len = strlen(token);
 
-            snprintf(temp_path, sizeof(temp_path), "%s/%s", resolved_path,
-                     token);
-            if (fs_stat(temp_path, &entry) < 0)
+            // 确保路径连接正确
+            if (resolved_len > 0 && resolved_path[resolved_len - 1] != '/')
             {
-                // return -ENOENT; // 路径不存在（暂时注释）
+                if (resolved_len + token_len + 2 <= PATH_MAX)
+                {
+                    strcat(resolved_path, "/");
+                    strcat(resolved_path, token);
+                }
+                else
+                {
+                    return -ENAMETOOLONG;
+                }
             }
-
-            // 添加路径段
-            if (len > 0 && resolved_path[len - 1] != '/')
+            else
             {
-                strncat(resolved_path, "/", PATH_MAX - len - 1);
+                if (resolved_len + token_len + 1 <= PATH_MAX)
+                {
+                    strcat(resolved_path, token);
+                }
+                else
+                {
+                    return -ENAMETOOLONG;
+                }
             }
-            if (len == 0)
-            {
-                resolved_path[0] = '/';
-                resolved_path[1] = '\0';
-            }
-            strncat(resolved_path, token, PATH_MAX - strlen(resolved_path) - 1);
         }
         token = strtok(NULL, "/");
+    }
+
+    // 确保路径以 null 结尾且格式正确
+    size_t final_len = strlen(resolved_path);
+    if (final_len > 1 && resolved_path[final_len - 1] == '/')
+    {
+        resolved_path[final_len - 1] = '\0';
     }
 
     return 0;
@@ -122,4 +160,9 @@ char* realpath(const char* path, char* resolved_path)
     }
 
     return resolved_path;
+}
+
+__weak_symbol char* getcwd(char* __buf, size_t __size)
+{
+    return NULL;
 }

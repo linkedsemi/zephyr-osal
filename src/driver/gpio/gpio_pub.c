@@ -104,6 +104,7 @@ int alphasort(const struct dirent **a, const struct dirent **b) {
     return strcmp((*a)->d_name, (*b)->d_name);
 }
 
+#if 0
 int getcwd(char *buf, size_t size)
 {
     // 默认返回根目录 "/"
@@ -117,6 +118,7 @@ int getcwd(char *buf, size_t size)
     strncpy(buf, default_cwd, size);
     return 0;
 }
+#endif
 
 /* 用于检查文件是否存在以及当前用户是否有指定权限 不需要检查，直接返回0即可*/
 int access(const char *pathname, int mode)
