@@ -8,158 +8,112 @@
 
 #define PATH_MAX 256
 
-static int resolve_path(const char* path, char* resolved_path)
-{
-    struct fs_dirent entry;
-    char* token;
-    char temp_path[PATH_MAX];
-    char* last_slash;
-
-    if (!path || !resolved_path)
-    {
-        return -EINVAL;
-    }
-
-    if (path[0] != '/')
-    {
-        // 处理相对路径
-        if (getcwd(resolved_path, PATH_MAX) == NULL)
-        {
-            return -errno;
-        }
-        // 确保路径以 '/' 结尾，便于后续处理
-        size_t len = strlen(resolved_path);
-        if (len > 0 && resolved_path[len - 1] != '/')
-        {
-            if (len + 1 < PATH_MAX)
-            {
-                resolved_path[len] = '/';
-                resolved_path[len + 1] = '\0';
-            }
-        }
-    }
-    else
-    {
-        // 处理绝对路径
-        resolved_path[0] = '/';
-        resolved_path[1] = '\0';
-    }
-
-    // 复制路径到临时缓冲区
-    strncpy(temp_path, path, sizeof(temp_path) - 1);
-    temp_path[sizeof(temp_path) - 1] = '\0';
-
-    // 使用 strtok 分割路径
-    token = strtok(temp_path, "/");
-    while (token)
-    {
-        if (strcmp(token, ".") == 0)
-        {
-            // 忽略 "." 当前目录
-        }
-        else if (strcmp(token, "..") == 0)
-        {
-            // 处理 ".." 上级目录
-            last_slash = strrchr(resolved_path, '/');
-            if (last_slash && last_slash != resolved_path)
-            {
-                *last_slash = '\0';
-                last_slash = strrchr(resolved_path, '/');
-                if (last_slash)
-                {
-                    *(last_slash + 1) = '\0';
-                }
-                else
-                {
-                    // 恢复
-                    resolved_path[0] = '/';
-                    resolved_path[1] = '\0';
-                }
-            }
-        }
-        else
-        {
-            // 处理普通目录名
-            size_t resolved_len = strlen(resolved_path);
-            size_t token_len = strlen(token);
-
-            // 确保路径连接正确
-            if (resolved_len > 0 && resolved_path[resolved_len - 1] != '/')
-            {
-                if (resolved_len + token_len + 2 <= PATH_MAX)
-                {
-                    strcat(resolved_path, "/");
-                    strcat(resolved_path, token);
-                }
-                else
-                {
-                    return -ENAMETOOLONG;
-                }
-            }
-            else
-            {
-                if (resolved_len + token_len + 1 <= PATH_MAX)
-                {
-                    strcat(resolved_path, token);
-                }
-                else
-                {
-                    return -ENAMETOOLONG;
-                }
-            }
-        }
-        token = strtok(NULL, "/");
-    }
-
-    // 确保路径以 null 结尾且格式正确
-    size_t final_len = strlen(resolved_path);
-    if (final_len > 1 && resolved_path[final_len - 1] == '/')
-    {
-        resolved_path[final_len - 1] = '\0';
-    }
-
-    return 0;
-}
-
 char* realpath(const char* path, char* resolved_path)
 {
-    if (!path)
-    {
-        errno = EINVAL;
-        return NULL;
-    }
-
-    char* allocated_path = NULL;
-    if (!resolved_path)
-    {
-        resolved_path = malloc(PATH_MAX);
-        if (!resolved_path)
-        {
-            errno = ENOMEM;
+    char temp_path[PATH_MAX];
+    
+    if (path[0] != '/') {
+        /* it is an relative path */
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) == NULL) {
             return NULL;
         }
-        allocated_path = resolved_path;
-    }
-    else
-    {
-        // 确保传入的 resolved_path 有足够空间
-        if (strlen(resolved_path) >= PATH_MAX)
-        {
+        
+        /* concatenate the current directory and relative path*/
+        int cwd_len = strlen(cwd);
+        int path_len = strlen(path);
+        
+        /* ensure that it does not exceed the buffer area */
+        if (cwd_len + 1 + path_len >= PATH_MAX) {
             errno = ENAMETOOLONG;
             return NULL;
         }
-    }
-
-    if (resolve_path(path, resolved_path) < 0)
-    {
-        if (allocated_path)
-        {
-            free(allocated_path);
+        
+        /* construct an absolute path */
+        strcpy(temp_path, cwd);
+        if (cwd[cwd_len - 1] != '/') {
+            strcat(temp_path, "/");
         }
-        return NULL;
+        strcat(temp_path, path);
+    } else {
+        /* it is an absolute path */
+        strncpy(temp_path, path, PATH_MAX - 1);
+        temp_path[PATH_MAX - 1] = '\0';
     }
 
-    return resolved_path;
+    char* out_path = resolved_path;
+    
+    /* canonical path starts with / */
+    strlcpy(out_path, "/", PATH_MAX);
+
+    /* pointers moving over the input and output path buffers */
+    const char* in_ptr = temp_path;
+    char* out_ptr = out_path + 1;
+    /* number of path components in the output buffer */
+    size_t out_depth = 0;
+
+    while (*in_ptr) {
+        /* "path component" is the part between two '/' path separators.
+         * locate the next path component in the input path:
+         */
+        const char* end_of_path_component = strchrnul(in_ptr, '/');
+        size_t path_component_len = end_of_path_component - in_ptr;
+
+        if (path_component_len == 0 ||
+            (path_component_len == 1 && in_ptr[0] == '.')) {
+            /* empty path component or '.' - nothing to do */
+        } else if (path_component_len == 2 && in_ptr[0] == '.' && in_ptr[1] == '.') {
+            /* '..' - remove one path component from the output */
+            if (out_depth == 0) {
+                /* nothing to remove */
+            } else if (out_depth == 1) {
+                /* there is only one path component in output;
+                 * remove it, but keep the leading separator
+                 */
+                out_ptr = out_path + 1;
+                *out_ptr = '\0';
+                out_depth = 0;
+            } else {
+                /* remove last path component and the separator preceding it */
+                char * prev_sep = strrchr(out_path, '/');
+                assert(prev_sep > out_path);  /* this shouldn't be the leading separator */
+                out_ptr = prev_sep;
+                *out_ptr = '\0';
+                --out_depth;
+            }
+        } else {
+            /* copy path component to output; +1 is for the separator  */
+            if (out_ptr - out_path + 1 + path_component_len > PATH_MAX - 1) {
+                /* output buffer insufficient */
+                errno = E2BIG;
+                goto fail;
+            } else {
+                /* add separator if necessary */
+                if (out_depth > 0) {
+                    *out_ptr = '/';
+                    ++out_ptr;
+                }
+                memcpy(out_ptr, in_ptr, path_component_len);
+                out_ptr += path_component_len;
+                *out_ptr = '\0';
+                ++out_depth;
+            }
+        }
+        /* move input pointer to separator right after this path component */
+        in_ptr += path_component_len;
+        if (*in_ptr != '\0') {
+            /* move past it unless already at the end of the input string */
+            ++in_ptr;
+        }
+    }
+    return out_path;
+
+fail:
+    if (resolved_path == NULL) {
+        /* out_path was allocated, free it */
+        free(out_path);
+    }
+    return NULL;
 }
 
 __weak_symbol char* getcwd(char* __buf, size_t __size)
