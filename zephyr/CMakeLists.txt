@@ -18,6 +18,7 @@ if(CONFIG_BOARD_ALIMOC30_CMU610_CPU2)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/eeprom/test.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/uart/uart_dev.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/overlay_fs.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/uart/uart_test.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/utils.c
     )
 elseif(CONFIG_BOARD_ALIMOC30_CMU610_CPU1)
