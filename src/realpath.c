@@ -11,7 +11,11 @@
 char* realpath(const char* path, char* resolved_path)
 {
     char temp_path[PATH_MAX];
-    
+    if (path == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
     if (path[0] != '/') {
         /* it is an relative path */
         char cwd[PATH_MAX];
@@ -42,7 +46,14 @@ char* realpath(const char* path, char* resolved_path)
     }
 
     char* out_path = resolved_path;
-    
+    if (out_path == NULL) {
+        out_path = (char *)malloc(PATH_MAX);
+        if (out_path == NULL) {
+            errno = ENOMEM;
+            return NULL;
+        }
+    }
+
     /* canonical path starts with / */
     strlcpy(out_path, "/", PATH_MAX);
 
