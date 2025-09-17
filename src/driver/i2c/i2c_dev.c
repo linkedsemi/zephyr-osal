@@ -62,7 +62,7 @@ static const char *getFileName(const char *filePath)
 
 static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t mode)
 {
-	LOG_ERROR("i2cdev_open start----\n");
+	LOG_DBG("i2cdev_open start----\n");
 	struct i2c_device_info *client = NULL;
 
 	// 遍历所有 I2C 设备实例，找到对应的设备
@@ -104,13 +104,13 @@ static int i2cdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t m
 	zfp->filep = client;
 	zfp->mp = &i2cfs_mnt;
 
-	LOG_ERROR("I2C device with name '%s' opened successfully\n", file_name);
+	LOG_DBG("I2C device with name '%s' opened successfully\n", file_name);
 	return 0;
 }
 
 static int i2cdev_close(struct fs_file_t *zfp)
 {
-	LOG_ERROR("i2cdev_close start----\n");
+	LOG_DBG("i2cdev_close start----\n");
 	if (zfp->filep)
 	{
 		struct i2c_device_info *client = zfp->filep;
@@ -119,7 +119,7 @@ static int i2cdev_close(struct fs_file_t *zfp)
 	if (zfp->mp)
 	{
 		zfp->mp = NULL;
-		LOG_ERROR("Closed i2cfs mount");
+		LOG_DBG("Closed i2cfs mount");
 	}
 
 	return 0;
@@ -127,7 +127,7 @@ static int i2cdev_close(struct fs_file_t *zfp)
 
 static ssize_t i2cdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 {
-	LOG_ERROR("i2cdev_read start----\n");
+	LOG_DBG("i2cdev_read start----\n");
 	struct i2c_device_info *client = zfp->filep;
 
 	if (client == NULL)
@@ -148,13 +148,13 @@ static ssize_t i2cdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 		return ret;
 	}
 
-	LOG_ERROR("Read %zu bytes from I2C 0x%02X", size, client->addr);
+	LOG_DBG("Read %zu bytes from I2C 0x%02X", size, client->addr);
 	return size;
 }
 
 static ssize_t i2cdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
 {
-	LOG_ERROR("i2cdev_write start----\n");
+	LOG_DBG("i2cdev_write start----\n");
 	struct i2c_device_info *client = zfp->filep;
 	const uint8_t *write_buf = (const uint8_t *)ptr;
 
@@ -184,14 +184,14 @@ static ssize_t i2cdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
 		return ret;
 	}
 
-	LOG_ERROR("I2C writing %zu bytes to device at address 0x%x", size, client->addr);
+	LOG_DBG("I2C writing %zu bytes to device at address 0x%x", size, client->addr);
 	return size;
 }
 
 static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 							 struct i2c_msg_linux *msgs)
 {
-	LOG_ERROR("i2cdev_ioctl_rdwr start----\n");
+	LOG_DBG("i2cdev_ioctl_rdwr start----\n");
 	int i, res, nmsgs_sent = 0;
 
 	for (i = 0; i < nmsgs; i++)
@@ -215,7 +215,7 @@ static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 		}
 		nmsgs_sent++;
 	}
-	LOG_ERROR("i2cdev_ioctl_rdwr successful----\n");
+	LOG_DBG("i2cdev_ioctl_rdwr successful----\n");
 	return nmsgs_sent;
 }
 
@@ -258,7 +258,7 @@ static const char* get_smbus_name(const struct device *dev){
 		}
 	}
 
-	LOG_ERROR("No mapping found for device: %s\n", i2c_name);
+	LOG_DBG("No mapping found for device: %s\n", i2c_name);
     return NULL;
 }
 
@@ -402,7 +402,7 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 		return 0;
 	case I2C_RDWR:
 	{
-		LOG_ERROR("ioctl I2C_RDWR----\n");
+		LOG_DBG("ioctl I2C_RDWR----\n");
 		
 		// rdwr_arg = va_arg(args, struct i2c_rdwr_ioctl_data);
 		struct i2c_rdwr_ioctl_data *rdwr_arg_ptr = va_arg(args, struct i2c_rdwr_ioctl_data *);
@@ -473,7 +473,7 @@ static int i2cdev_mount(struct fs_mount_t *mountp)
 		}
 	}
 
-	// LOG_ERROR("I2C device mounted successfully\n");
+	LOG_DBG("I2C device mounted successfully\n");
 	return 0;
 }
 static int i2cdev_unmount(struct fs_mount_t *mountp)
@@ -485,7 +485,7 @@ static int i2cdev_unmount(struct fs_mount_t *mountp)
 	}
 
 	mountp->mnt_point = NULL;
-	LOG_ERROR("I2C device unmounted successfully\n");
+	LOG_DBG("I2C device unmounted successfully\n");
 	return 0;
 }
 
@@ -499,7 +499,7 @@ static int i2cdev_opendir(struct fs_dir_t *dp, const char *path)
 
 	dp->dirp = &i2c_index;
 
-	// LOG_ERROR("I2C device opendir successfully\n");
+	LOG_DBG("I2C device opendir successfully\n");
 	return 0;
 }
 
@@ -519,7 +519,7 @@ static int i2cdev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 
 	// 没有更多条目
 	memset(entry, 0, sizeof(struct fs_dirent));
-	// LOG_ERROR("No more I2C devices to list\n");
+	LOG_DBG("No more I2C devices to list\n");
 	return 0;
 }
 
@@ -534,7 +534,7 @@ static int i2cdev_closedir(struct fs_dir_t *dp)
 	i2c_index = 0;
 	dp->dirp = NULL;
 
-	LOG_ERROR("I2C device closedir successfully\n");
+	LOG_DBG("I2C device closedir successfully\n");
 	return 0;
 }
 
@@ -565,7 +565,7 @@ static int i2cdev_stat(struct fs_mount_t *mountp,
 		}
 	}
 
-	LOG_ERROR("I2C device stat successfully\n");
+	LOG_DBG("I2C device stat successfully\n");
 	return 0;
 }
 
@@ -587,22 +587,22 @@ static const struct fs_file_system_t i2cdev_fs = {
 
 static int i2c_dev_init(void)
 {
-	LOG_ERROR("i2c /dev entries driver\n");
+	LOG_DBG("i2c /dev entries driver\n");
 
-	LOG_ERROR("i2c_num = %d\n", I2C_NUM);
+	LOG_DBG("i2c_num = %d\n", I2C_NUM);
 
 	// 输出i2c设备name和label信息
 	for (int i=0; i < I2C_NUM; i++){
 		if (i2c_devices[i].dev->name != NULL){
-			LOG_ERROR("i2c_devices[%d].dev->name = %s\n", i, i2c_devices[i].dev->name);
+			LOG_DBG("i2c_devices[%d].dev->name = %s\n", i, i2c_devices[i].dev->name);
 		}
 		if (i2c_devices[i].label != NULL){
-			LOG_ERROR("i2c_devices[%d].label = %s\n", i, i2c_devices[i].label);
+			LOG_DBG("i2c_devices[%d].label = %s\n", i, i2c_devices[i].label);
 		}
 	}
 
 	i2cfs_mnt.mnt_point = I2C_MNT_POINT;
-	LOG_ERROR("i2cfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n", i2cfs_mnt.type, i2cfs_mnt.mnt_point, i2cfs_mnt.fs_data);
+	LOG_DBG("i2cfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n", i2cfs_mnt.type, i2cfs_mnt.mnt_point, i2cfs_mnt.fs_data);
 
 	int rc = fs_mount(&i2cfs_mnt);
 	if (rc != 0)
@@ -617,7 +617,7 @@ static int i2c_dev_init(void)
 
 static int i2c_init(void)
 {
-	LOG_ERROR("i2c_init----------start\n");
+	LOG_DBG("i2c_init----------start\n");
 
 	int rc = fs_register(FS_I2C, &i2cdev_fs);
 	if (rc < 0)
@@ -626,7 +626,7 @@ static int i2c_init(void)
 	}
 	else
 	{
-		LOG_ERROR("i2cfs fs registered\n");
+		LOG_DBG("i2cfs fs registered\n");
 	}
 
 	rc = i2c_dev_init();
@@ -636,7 +636,7 @@ static int i2c_init(void)
 		return rc;
 	}
 
-	LOG_ERROR("i2c_init----------end\n");
+	LOG_DBG("i2c_init----------end\n");
 	return rc;
 }
 

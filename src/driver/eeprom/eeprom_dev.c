@@ -55,7 +55,7 @@ static const char *getFileName(const char *filePath)
  */
 static int eepromdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t mode)
 {
-	LOG_ERROR("Opening EEPROM device file: %s", file_name);
+	LOG_DBG("Opening EEPROM device file: %s", file_name);
 
     // 直接验证文件名是否匹配
     if (strcmp(getFileName(file_name), EEPROM_LABEL) != 0) {
@@ -82,7 +82,7 @@ static int eepromdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_
 	zfp->filep = client;
 	zfp->mp = &eepromfs_mnt;
 
-    LOG_ERROR("EEPROM opened successfully");
+    LOG_DBG("EEPROM opened successfully");
 	return 0;
 }
 
@@ -105,14 +105,14 @@ static int eepromdev_close(struct fs_file_t *zfp)
         if (!atomic_cas(&client->opened, 1, 0)) {
             LOG_ERROR("EEPROM device was not properly opened");
         }
-        LOG_ERROR("Released EEPROM device lock");
+        LOG_DBG("Released EEPROM device lock");
     }
 
     /* 清理文件指针 */
     zfp->filep = NULL;
     zfp->mp = NULL;
 
-    LOG_ERROR("EEPROM device closed successfully");
+    LOG_DBG("EEPROM device closed successfully");
     return 0;
 }
 
@@ -123,7 +123,7 @@ static int eepromdev_close(struct fs_file_t *zfp)
  */
 static ssize_t eepromdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 {
-	LOG_ERROR("eepromdev_read start----\n");
+	LOG_DBG("eepromdev_read start----\n");
 	struct eeprom_device_info *client = zfp->filep;
 
 	if (client == NULL)
@@ -144,7 +144,7 @@ static ssize_t eepromdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 		return ret;
 	}
 
-	LOG_ERROR("Read %zu bytes", size);
+	LOG_DBG("Read %zu bytes", size);
 	return size;
 }
 
@@ -155,7 +155,7 @@ static ssize_t eepromdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
  */
 static ssize_t eepromdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
 {
-	LOG_ERROR("eepromdev_write start----\n");
+	LOG_DBG("eepromdev_write start----\n");
 	struct eeprom_device_info *client = zfp->filep;
 	const uint8_t *write_buf = (const uint8_t *)ptr;
 
@@ -184,7 +184,7 @@ static ssize_t eepromdev_write(struct fs_file_t *zfp, const void *ptr, size_t si
 		return ret;
 	}
 
-	LOG_ERROR("EEPROM writing %zu bytes to device", size);
+	LOG_DBG("EEPROM writing %zu bytes to device", size);
 	return size;
 }
 
@@ -216,7 +216,7 @@ static int eepromdev_lseek(struct fs_file_t *fp, off_t off, int whence)
     switch (whence) {
         case FS_SEEK_SET:
 			client->offset = off;
-			LOG_ERROR("Set offset to %ld", client->offset);
+			LOG_DBG("Set offset to %ld", client->offset);
             break;
         case FS_SEEK_CUR:
             LOG_ERROR("FS_SEEK_CUR is not supported for EEPROM");
@@ -229,7 +229,7 @@ static int eepromdev_lseek(struct fs_file_t *fp, off_t off, int whence)
             return -EINVAL;
     }
 
-    LOG_ERROR("EEPROM lseek to offset: %ld", off);
+    LOG_DBG("EEPROM lseek to offset: %ld", off);
     return 0;
 }
 
@@ -288,7 +288,7 @@ static int eepromdev_mount(struct fs_mount_t *mountp)
         return -EINVAL;
     }
 
-    LOG_ERROR("Mounted EEPROM at %s", mountp->mnt_point);
+    LOG_DBG("Mounted EEPROM at %s", mountp->mnt_point);
     return 0;
 }
 
@@ -318,7 +318,7 @@ static int eepromdev_unmount(struct fs_mount_t *mountp)
     mountp->mnt_point = NULL;
     compiler_barrier();
 
-    LOG_ERROR("Unmounted EEPROM filesystem");
+    LOG_DBG("Unmounted EEPROM filesystem");
     return 0;
 }
 
@@ -332,7 +332,7 @@ static int eepromdev_opendir(struct fs_dir_t *dp, const char *path)
 
 	dp->dirp = &eeprom_index;
 
-	// LOG_ERROR("EEPROM device opendir successfully\n");
+	LOG_DBG("EEPROM device opendir successfully\n");
 	return 0;
 }
 
@@ -352,7 +352,7 @@ static int eepromdev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 
 	// 没有更多条目
 	memset(entry, 0, sizeof(struct fs_dirent));
-	// LOG_ERROR("No more EEPROM devices to list\n");
+	LOG_DBG("No more EEPROM devices to list\n");
 	return 0;
 }
 
@@ -366,7 +366,7 @@ static int eepromdev_closedir(struct fs_dir_t *dp)
 
     dp->dirp = NULL;
 
-    // LOG_ERROR("EEPROM directory closed successfully\n");
+    LOG_DBG("EEPROM directory closed successfully\n");
     return 0;
 }
 
@@ -392,7 +392,7 @@ static int eepromdev_stat(struct fs_mount_t *mountp,
         return -EINVAL;
     }
 
-    // LOG_ERROR("EEPROM device stat successful: %s\n", path);
+    LOG_DBG("EEPROM device stat successful: %s\n", path);
     return 0;
 }
 
@@ -415,12 +415,12 @@ static const struct fs_file_system_t eepromdev_fs = {
 
 static int eeprom_dev_init(void)
 {
-	LOG_ERROR("eeprom /dev entries driver\n");
+	LOG_DBG("eeprom /dev entries driver\n");
 
-	LOG_ERROR("eeprom_devices.dev->name = %s\n", eeprom_devices.dev->name);
+	LOG_DBG("eeprom_devices.dev->name = %s\n", eeprom_devices.dev->name);
 
 	eepromfs_mnt.mnt_point = EEPROM_MNT_POINT;
-	LOG_ERROR("eepromfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n", eepromfs_mnt.type, eepromfs_mnt.mnt_point, eepromfs_mnt.fs_data);
+	LOG_DBG("eepromfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n", eepromfs_mnt.type, eepromfs_mnt.mnt_point, eepromfs_mnt.fs_data);
 
 	int rc = fs_mount(&eepromfs_mnt);
 	if (rc != 0)
@@ -435,7 +435,7 @@ static int eeprom_dev_init(void)
 
 static int eeprom_init(void)
 {
-	LOG_ERROR("eeprom_init----------start\n");
+	LOG_DBG("eeprom_init----------start\n");
 
 	int rc = fs_register(FS_EEPROM, &eepromdev_fs);
 	if (rc < 0)
@@ -454,7 +454,7 @@ static int eeprom_init(void)
 		return rc;
 	}
 
-	LOG_ERROR("eeprom_init----------end\n");
+	LOG_DBG("eeprom_init----------end\n");
 	return rc;
 }
 
