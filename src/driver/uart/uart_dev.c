@@ -25,7 +25,8 @@ LOG_MODULE_REGISTER(uart_dev, LOG_LEVEL_INF);
 #define MAX_UART_DEVICES 5
 
 //#define DT_DRV_COMPAT linkedsemi_ls_uart
-#define DT_DRV_COMPAT ns16550
+// #define DT_DRV_COMPAT ns16550
+#define DT_DRV_COMPAT linkedsemi_ls_vuart
 #define UART_NUM DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)
 
 BUILD_ASSERT(UART_NUM <= MAX_UART_DEVICES,
@@ -374,7 +375,8 @@ static int uartdev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
         return 0; // 结束遍历
     }
 
-    snprintf(entry->name, sizeof(entry->name), "ttyS%d", *index);
+    // 构造文件条目信息
+    snprintf(entry->name, sizeof(entry->name), "%s", uart_devices[*index].label);
     entry->type = FS_DIR_ENTRY_FILE;
     entry->size = 0;
     (*index)++;
