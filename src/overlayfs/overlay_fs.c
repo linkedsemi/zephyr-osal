@@ -27,9 +27,6 @@ static char* overlayfs_mnt_point = NULL;
 static char* rofs_mnt_point = NULL;
 static char* rwfs_mnt_point = NULL;
 
-extern overlay_dir_t* head;
-overlay_dir_t* readed_dir;
-
 const struct fs_dirent dummy_entry = {
     .type = FS_DIR_ENTRY_DIR, .name = {0}, .size = 0};
 const overlay_dir_t dummy_dir = {.next = NULL, .entry = dummy_entry};
@@ -464,7 +461,7 @@ static int overlay_mkdir(struct fs_mount_t* mountp, const char* path)
     return rc;
 }
 
-int fs_dir_read(struct fs_dir_t* dp, const char* part)
+int fs_dir_read(struct overlay_dirp *dirp, struct fs_dir_t* dp, const char* part)
 {
     while (1)
     {
@@ -482,14 +479,14 @@ int fs_dir_read(struct fs_dir_t* dp, const char* part)
 
         if (strcmp(part, rwfs_mnt_point) == 0)
         {
-            if (!is_dir_exists(entry.name))
+            if (!is_dir_exists(dirp, entry.name))
             {
-                add_dir(entry);
+                add_dir(dirp, &entry);
             }
         }
         else
         {
-            add_dir(entry);
+            add_dir(dirp, &entry);
         }
     }
 }
@@ -497,7 +494,6 @@ int fs_dir_read(struct fs_dir_t* dp, const char* part)
 static int overlay_opendir(struct fs_dir_t* dp, const char* path)
 {
     struct overlay_mount_data* data = dp->mp->fs_data;
-    struct overlay_dir_t* ol_dir;
     char rw_path[PATH_MAX], ro_path[PATH_MAX];
     int rc, close_rc;
 
@@ -506,20 +502,28 @@ static int overlay_opendir(struct fs_dir_t* dp, const char* path)
     rc = resolve_path(path, rw_path, ro_path, sizeof(rw_path));
     if (rc != 0)
     {
-        fs_unlock(data);
-        return rc;
+        goto exit;
     }
 
     struct fs_dir_t dir_ro;
     struct fs_dir_t dir_rw;
     struct fs_dirent ro_stat_entry, rw_stat_entry;
+    struct overlay_dirp *dirp;
+
+    dirp = (struct overlay_dirp *)calloc(1, sizeof(struct overlay_dirp));
+    if (!dirp)
+    {
+        rc = -ENOMEM;
+        goto exit;
+    }
 
     fs_dir_t_init(&dir_ro);
     fs_dir_t_init(&dir_rw);
 
     if (fs_stat(rw_path, &rw_stat_entry) && fs_stat(ro_path, &ro_stat_entry))
     {
-        return -ENOENT;
+        rc = -ENOENT;
+        goto exit;
     }
 
     if (!fs_stat(ro_path, &ro_stat_entry))
@@ -531,7 +535,7 @@ static int overlay_opendir(struct fs_dir_t* dp, const char* path)
             goto ro_close;
         }
 
-        rc = fs_dir_read(&dir_ro, rofs_mnt_point);
+        rc = fs_dir_read(dirp, &dir_ro, rofs_mnt_point);
         if (rc)
             goto ro_close;
     }
@@ -545,16 +549,13 @@ static int overlay_opendir(struct fs_dir_t* dp, const char* path)
             goto rw_close;
         }
 
-        rc = fs_dir_read(&dir_rw, rwfs_mnt_point);
+        rc = fs_dir_read(dirp, &dir_rw, rwfs_mnt_point);
         if (rc)
             goto rw_close;
     }
 
-    if (head)
-    {
-        dp->dirp = head;
-    }
-    else
+    dp->dirp = dirp;
+    if (!dp->dirp)
     {
         // dir is empty, return dummy
         dp->dirp = &dummy_dir;
@@ -588,18 +589,20 @@ static int overlay_readdir(struct fs_dir_t* dp, struct fs_dirent* entry)
         return -EBADF;
     }
 
-    if (readed_dir == NULL)
+    struct overlay_dirp *dirp = (struct overlay_dirp *)dp->dirp;
+
+    if (dirp->readed_dir == NULL)
     {
-        overlay_dir_t* dir = (overlay_dir_t*)dp->dirp;
+        overlay_dir_t* dir = (overlay_dir_t*)dirp->head;
         *entry = dir->entry;
-        readed_dir = dir;
+        dirp->readed_dir = dir;
     }
     else
     {
-        if (readed_dir->next != NULL)
+        if (dirp->readed_dir->next != NULL)
         {
-            *entry = readed_dir->next->entry;
-            readed_dir = readed_dir->next;
+            *entry = dirp->readed_dir->next->entry;
+            dirp->readed_dir = dirp->readed_dir->next;
         }
         else
         {
@@ -617,9 +620,9 @@ static int overlay_closedir(struct fs_dir_t* dp)
         return -EBADF;
     }
 
-    free_dir();
+    free_dir(dp->dirp);
+    free(dp->dirp);
     dp->dirp = NULL;
-    readed_dir = NULL;
 
     return 0;
 }
@@ -711,9 +714,6 @@ static int overlay_mount(struct fs_mount_t* mountp)
     strcpy(overlayfs_mnt_point, mountp->mnt_point);
     strcpy(rofs_mnt_point, data->ro_mnt->mnt_point);
     strcpy(rwfs_mnt_point, data->rw_mnt->mnt_point);
-
-    head = NULL;
-    readed_dir = NULL;
 
     LOG_INF("Overlay mounted at %s", mountp->mnt_point);
     return 0;

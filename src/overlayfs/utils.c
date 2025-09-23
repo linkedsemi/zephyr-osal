@@ -18,11 +18,9 @@
 
 LOG_MODULE_DECLARE(overlay_fs);
 
-overlay_dir_t* head;
-
-int is_dir_exists(const char* path)
+int is_dir_exists(struct overlay_dirp *dirp, const char* path)
 {
-    overlay_dir_t* cur = head;
+    overlay_dir_t* cur = dirp->head;
 
     while (cur != NULL)
     {
@@ -36,9 +34,9 @@ int is_dir_exists(const char* path)
     return 0;
 }
 
-void add_dir(const struct fs_dirent entry)
+void add_dir(struct overlay_dirp *dirp, const struct fs_dirent *entry)
 {
-    if (is_dir_exists(entry.name))
+    if (is_dir_exists(dirp, entry->name))
     {
         return;
     }
@@ -50,14 +48,14 @@ void add_dir(const struct fs_dirent entry)
         return;
     }
 
-    new_dir->entry = entry;
-    new_dir->next = head;
-    head = new_dir;
+    new_dir->entry = *entry;
+    new_dir->next = dirp->head;
+    dirp->head = new_dir;
 }
 
-void free_dir()
+void free_dir(struct overlay_dirp *dirp)
 {
-    overlay_dir_t* cur = head;
+    overlay_dir_t* cur = dirp->head;
 
     while (cur != NULL)
     {
@@ -65,6 +63,4 @@ void free_dir()
         cur = cur->next;
         free(temp);
     }
-
-    head = NULL;
 }

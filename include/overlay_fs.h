@@ -18,7 +18,7 @@
 struct overlay_mount_data {
     struct fs_mount_t *ro_mnt;
     struct fs_mount_t *rw_mnt;
-    struct k_mutex mutex; 
+    struct k_mutex mutex;
 };
 
 typedef struct overlay_dir {
@@ -26,7 +26,12 @@ typedef struct overlay_dir {
     struct fs_dirent entry;
 }overlay_dir_t;
 
+struct overlay_dirp {
+    overlay_dir_t* head;
+    overlay_dir_t* readed_dir;
+};
+
 // Utils for overlay_dir
-void add_dir(const struct fs_dirent entry);
-int is_dir_exists(const char *path);
-void free_dir( );
+void add_dir(struct overlay_dirp *dirp, const struct fs_dirent *entry);
+int is_dir_exists(struct overlay_dirp *dirp, const char *path);
+void free_dir(struct overlay_dirp *dirp);
