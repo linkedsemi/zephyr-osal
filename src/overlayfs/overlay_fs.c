@@ -496,6 +496,7 @@ static int overlay_opendir(struct fs_dir_t* dp, const char* path)
     struct overlay_mount_data* data = dp->mp->fs_data;
     char rw_path[PATH_MAX], ro_path[PATH_MAX];
     int rc, close_rc;
+    struct overlay_dirp *dirp = NULL;
 
     fs_lock(data);
 
@@ -508,7 +509,6 @@ static int overlay_opendir(struct fs_dir_t* dp, const char* path)
     struct fs_dir_t dir_ro;
     struct fs_dir_t dir_rw;
     struct fs_dirent ro_stat_entry, rw_stat_entry;
-    struct overlay_dirp *dirp;
 
     dirp = (struct overlay_dirp *)calloc(1, sizeof(struct overlay_dirp));
     if (!dirp)
@@ -537,7 +537,9 @@ static int overlay_opendir(struct fs_dir_t* dp, const char* path)
 
         rc = fs_dir_read(dirp, &dir_ro, rofs_mnt_point);
         if (rc)
+        {
             goto ro_close;
+        }
     }
 
     if (!fs_stat(rw_path, &rw_stat_entry))
@@ -551,7 +553,10 @@ static int overlay_opendir(struct fs_dir_t* dp, const char* path)
 
         rc = fs_dir_read(dirp, &dir_rw, rwfs_mnt_point);
         if (rc)
+        {
             goto rw_close;
+        }
+            
     }
 
     dp->dirp = dirp;
@@ -578,6 +583,10 @@ ro_close:
     }
 
 exit:
+    if (rc && dirp)
+    {
+        free_dir(dirp);
+    }
     fs_unlock(data);
     return rc;
 }
