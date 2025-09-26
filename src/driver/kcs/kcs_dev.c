@@ -15,14 +15,14 @@
  #include <linux/ipmi_bmc.h>
  #include <driver/kcs/kcs_dev.h>
  
- LOG_MODULE_REGISTER(kcs_dev, LOG_LEVEL_ERR); // 注册日志模块
-
- #define CONFIG_KCS_DEV_MAX_SIZE 8192
+ LOG_MODULE_REGISTER(kcs_dev, LOG_LEVEL_INF); // 注册日志模块
  
  #define MAX_KCS_DEVICES 14 /* The maximum number of KCS devices */
 
  #define KCS_ZERO_DATA 0
- 
+
+#define KCS_POLL_INTERVAL_MS 100  // 轮询周期
+
  #define DT_DRV_COMPAT linkedsemi_ls_ipmi_kcs
  
  #define KCS_NUM DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)
@@ -122,34 +122,123 @@
  
 	 return 0;
  }
- 
- static ssize_t kcsdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
- {
-	 LOG_ERROR("kcsdev_read start----\n");
-	 struct kcs_device_info *client = zfp->filep;
- 
-	 if (client == NULL)
-	 {
-		 LOG_ERROR("No client context");
-		 return -EINVAL;
-	 }
- 
-	 if (size > CONFIG_KCS_DEV_MAX_SIZE)
-	 {
-		 size = CONFIG_KCS_DEV_MAX_SIZE;
-	 }
- 
-	 int ret = ipmi_read(client->dev, (uint8_t *)ptr, size);
-	 if (ret != 0)
-	 {
-		 LOG_ERROR("Read failed: %d", ret);
-		 return ret;
-	 }
- 
-	 LOG_ERROR("Read %zu bytes data %s", size, ptr);
-	 return size;
- }
- 
+
+// 轮询处理函数：尝试从底层读取一条请求，读到就缓存并唤醒 POLLIN
+static void kcs_rx_poll_work(struct k_work *work)
+{
+	struct k_work_delayable *dwork = CONTAINER_OF(work, struct k_work_delayable, work);
+	// 遍历所有设备，逐个轮询
+	for (int i = 0; i < KCS_NUM; i++) {
+		struct kcs_device_info *client = &kcs_devices[i];
+
+		// 若已有待取消息，跳过本轮（等用户态 read 取走）
+		if (atomic_get(&client->has_msg)) {
+			continue;
+		}
+
+		// 直接调用 ipmi_read尝试读取消息
+		int ret = ipmi_read(client->dev, client->rx_buf, sizeof(client->rx_buf));
+
+	    LOG_DBG("kcs_rx_poll_work ret:%d\n", ret);
+
+		if (ret > 0) {
+			client->rx_len = (size_t)ret;
+			atomic_set(&client->has_msg, 1);
+			// 唤醒等 POLLIN 的用户
+			k_poll_signal_raise(&client->poll_sig, 1);
+		}
+	}
+
+	// 重新安排下一轮
+	k_work_schedule(dwork, K_MSEC(KCS_POLL_INTERVAL_MS));
+}
+
+
+// poll 的 prepare/update：使用 k_poll_signal 通知 POLLIN
+static int kcs_poll_prepare_ctx(struct kcs_device_info *kcsDev,
+                  struct zvfs_pollfd *pfd,
+                  struct k_poll_event **pev,
+                  struct k_poll_event *pev_end)
+{
+    if (pfd->events & ZVFS_POLLIN) {
+
+        if (*pev == pev_end) {
+            return -ENOMEM;
+        }
+        (*pev)->signal = &kcsDev->poll_sig;
+        (*pev)->type = K_POLL_TYPE_SIGNAL;
+        (*pev)->mode = K_POLL_MODE_NOTIFY_ONLY;
+        (*pev)->state = K_POLL_STATE_NOT_READY;
+
+        // 如果此时已有待取消息，直接让 poll 立刻返回
+        if (atomic_get(&kcsDev->has_msg)) {
+            k_poll_signal_raise(&kcsDev->poll_sig, 1);
+        }
+
+        (*pev)++;
+    }
+    return 0;
+}
+
+static int kcs_poll_update_ctx(struct kcs_device_info *kcsDev,
+                 struct zvfs_pollfd *pfd,
+                 struct k_poll_event **pev)
+{
+    if (pfd->events & ZVFS_POLLIN) {
+        unsigned int signaled = 0;
+        int result = 0;
+        k_poll_signal_check(&kcsDev->poll_sig, &signaled, &result);
+        if (signaled) {
+            pfd->revents |= ZVFS_POLLIN;
+            k_poll_signal_reset(&kcsDev->poll_sig);
+        }
+        (*pev)++;
+    }
+    return 0;
+}
+
+
+// kcsdev_read：优先从设备文件"待取缓冲"返回，若没有消息则调用api读取
+static ssize_t kcsdev_read(struct fs_file_t *zfp, void *ptr, size_t size)
+{
+     LOG_ERROR("kcsdev_read start----\n");
+     struct kcs_device_info *client = zfp->filep;
+
+     if (client == NULL) {
+         LOG_ERROR("No client context");
+         return -EINVAL;
+     }
+
+     if (size > CONFIG_KCS_DEV_MAX_SIZE) {
+         size = CONFIG_KCS_DEV_MAX_SIZE;
+     }
+
+     // 先检查设备文件是否有缓存的待取消息
+     if (atomic_get(&client->has_msg)) {
+         size_t n = client->rx_len;
+         if (n > size) {
+             // 缓冲不够，返回 -ENOSPC，保持缓存不动，方便重试
+             return -ENOSPC;
+         }
+         memcpy(ptr, client->rx_buf, n);
+         // 清空"待取"消息
+         client->rx_len = 0;
+         atomic_set(&client->has_msg, 0);
+         LOG_ERROR("Read %zu bytes data (from devfile cache)", n);
+         return (ssize_t)n;
+     }
+
+     // 没有缓存，则直接请求api读取
+     int ret = ipmi_read(client->dev, (uint8_t *)ptr, size);
+     if (ret != 0) {
+         LOG_ERROR("Read failed: %d", ret);
+         return ret;
+     }
+
+     LOG_ERROR("Read %zu bytes data %s", size, ptr);
+     return size;
+}
+
  static ssize_t kcsdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
  {
 	 LOG_ERROR("kcsdev_write start----\n");
@@ -195,7 +284,7 @@
  
  static int kcsdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list args)
  {
-	 LOG_ERROR("kcsdev_ioctl start----\n");
+	 LOG_DBG("kcsdev_ioctl start----\n");
 	 struct kcs_device_info *client = zfp->filep;
 	 int ret = 0;
  
@@ -216,6 +305,26 @@
 		case IPMI_BMC_IOCTL_FORCE_ABORT:
 			ipmi_force_abort(client->dev);
 			break;
+	     case ZFD_IOCTL_POLL_PREPARE: {
+	         LOG_DBG("ioctl ZFD_IOCTL_POLL_PREPARE----\n");
+	         struct zvfs_pollfd *pfd;
+	         struct k_poll_event **pev;
+	         struct k_poll_event *pev_end;
+	         pfd = va_arg(args, struct zvfs_pollfd *);
+	         pev = va_arg(args, struct k_poll_event **);
+	         pev_end = va_arg(args, struct k_poll_event *);
+	         ret = kcs_poll_prepare_ctx(client, pfd, pev, pev_end);
+	         break;
+	     }
+	     case ZFD_IOCTL_POLL_UPDATE: {
+	         LOG_DBG("ioctl ZFD_IOCTL_POLL_UPDATE----\n");
+	         struct zvfs_pollfd *pfd;
+	         struct k_poll_event **pev;
+	         pfd = va_arg(args, struct zvfs_pollfd *);
+	         pev = va_arg(args, struct k_poll_event **);
+	         ret = kcs_poll_update_ctx(client, pfd, pev);
+	         break;
+	     }
 		default:
 			ret = -EINVAL;
 			break;
@@ -319,19 +428,21 @@
 	 }
 	 else
 	 {
-		 // 检查是否为 KCS 设备路径
-		 uint8_t minor;
-		 if (sscanf(path, "kcs-%hhu", &minor) == 1 && minor < KCS_NUM)
-		 {
-			 // 是 KCS 设备
-			 entry->type = FS_DIR_ENTRY_FILE;
-			 entry->size = 0;
-		 }
-		 else
-		 {
-			 LOG_ERROR("Invalid path\n");
-			 return -EINVAL;
-		 }
+	     // 检查是否为 KCS 设备路径（使用文件名与 label 匹配）
+	     const char *fname = getFileName(path);
+	     for (int i = 0; i < KCS_NUM; i++)
+	     {
+	         if (strcmp(fname, kcs_devices[i].label) == 0)
+	         {
+	             // 是 KCS 设备（按 label 匹配）
+	             entry->type = FS_DIR_ENTRY_FILE;
+	             entry->size = 0;
+	             LOG_ERROR("KCS device stat successfully\n");
+	             return 0;
+	         }
+	     }
+		 LOG_ERROR("Invalid path\n");
+		 return -EINVAL;
 	 }
  
 	 LOG_ERROR("KCS device stat successfully\n");
@@ -359,7 +470,17 @@
 	 LOG_ERROR("kcs /dev entries driver\n");
  
 	 LOG_ERROR("kcs_num = %d\n", KCS_NUM);
- 
+
+     // 初始化每个设备的 poll 信号与轮询工作
+     for (int i = 0; i < KCS_NUM; i++) {
+         k_poll_signal_init(&kcs_devices[i].poll_sig);
+         atomic_set(&kcs_devices[i].has_msg, 0);
+         kcs_devices[i].rx_len = 0;
+         k_work_init_delayable(&kcs_devices[i].rx_poller, kcs_rx_poll_work);
+         // 启动轮询
+         k_work_schedule(&kcs_devices[i].rx_poller, K_MSEC(KCS_POLL_INTERVAL_MS));
+     }
+
 	 // 输出kcs设备name和label信息
 	 for (int i=0; i < KCS_NUM; i++){
 		 if (kcs_devices[i].dev->name != NULL){
