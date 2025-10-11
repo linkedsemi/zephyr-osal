@@ -468,7 +468,7 @@ static int uart_dev_init(void)
     return 0;
 }
 
-static int uart_init(void)
+static int uart_fs_init(void)
 {
     LOG_INF("%s:%d", __func__, __LINE__);
     int ret = fs_register(FS_UART, &uart_fs);
@@ -481,11 +481,11 @@ static int uart_init(void)
 }
 
 #ifndef  CONFIG_UART_TEST
-SYS_INIT(uart_init, POST_KERNEL, CONFIG_FILE_SYSTEM_INIT_PRIORITY);
+SYS_INIT(uart_fs_init, POST_KERNEL, CONFIG_FILE_SYSTEM_INIT_PRIORITY);
 #else
 void uart_main_test()
 {
     printk("%s:%d\n", __func__, __LINE__);
-    uart_init();
+    uart_fs_init();
 }
 #endif
