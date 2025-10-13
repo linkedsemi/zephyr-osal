@@ -10,6 +10,8 @@
 #include <driver/gpio/gpio_dev.h>
 #include <zephyr/posix/poll.h>
 
+LOG_MODULE_DECLARE(gpio_dev, LOG_LEVEL_INF);
+
 // 提取主设备号 暂时使用
 int major(dev_t dev)
 {
@@ -120,10 +122,36 @@ int getcwd(char *buf, size_t size)
 }
 #endif
 
-/* 用于检查文件是否存在以及当前用户是否有指定权限 不需要检查，直接返回0即可*/
-int access(const char *pathname, int mode)
+/*
+ *   access() checks whether the calling process can access the filepath.
+ *   If path is a symbolic link, it is dereferenced.
+ */
+int access(const char* pathname, int mode)
 {
-    return 0;
+    if (pathname == NULL)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+
+    //Only supports F_OK, other modes return unsupported
+    if (mode == F_OK)
+    {
+        struct fs_dirent entry;
+        int rc = fs_stat(pathname, &entry);
+        if (rc < 0)
+        {
+            LOG_ERROR("access check failed! rc=%d", rc);
+            errno = -rc;
+            return -1;
+        }
+        return 0;
+    }
+
+    // R_OK/W_OK/X_OK semantics not implemented
+    LOG_ERROR("access mode not supported: %d", mode);
+    errno = ENOTSUP;
+    return -1;
 }
 
 int ppoll(struct pollfd *fds, unsigned int nfds, const struct timespec *timeout_ts, const sigset_t *sigmask)
