@@ -1,7 +1,7 @@
 if(CONFIG_ZEPHYR_OSAL)
     zephyr_library_named(zephyr-osal)
 
-if(CONFIG_BOARD_ALIMOC30_CMU610_CPU2)
+if((DT_NODE_HAS_STATUS(DT_NODELABEL(cpu2), okay)))
     zephyr_library_sources(
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/i2c/i2c_dev.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/i2c/test.c
