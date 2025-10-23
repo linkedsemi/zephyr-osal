@@ -1,7 +1,7 @@
 if(CONFIG_ZEPHYR_OSAL)
     zephyr_library_named(zephyr-osal)
 
-if((DT_NODE_HAS_STATUS(DT_NODELABEL(cpu2), okay)))
+if(CONFIG_SOC_LSQSH_CPU2)
     zephyr_library_sources(
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/i2c/i2c_dev.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/i2c/test.c
@@ -21,7 +21,7 @@ if((DT_NODE_HAS_STATUS(DT_NODELABEL(cpu2), okay)))
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/uart/uart_test.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/utils.c
     )
-elseif(CONFIG_BOARD_ALIMOC30_CMU610_CPU1)
+elseif(CONFIG_SOC_LSQSH_CPU1)
     zephyr_library_sources(
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/realpath.c
     )
