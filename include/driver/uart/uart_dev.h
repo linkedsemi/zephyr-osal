@@ -7,7 +7,7 @@
 #define RXBUF_SIZE 128
 
 #ifndef RX_RING_BUFFER_SIZE
-#define RX_RING_BUFFER_SIZE 1024
+#define RX_RING_BUFFER_SIZE 4096
 #endif
 
 #ifndef TX_RING_BUFFER_SIZE

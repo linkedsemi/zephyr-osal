@@ -26,7 +26,7 @@ LOG_MODULE_REGISTER(uart_dev, LOG_LEVEL_INF);
 
 //#define DT_DRV_COMPAT linkedsemi_ls_uart
 // #define DT_DRV_COMPAT ns16550
-#define DT_DRV_COMPAT linkedsemi_ls_vuart
+#define DT_DRV_COMPAT linkedsemi_vuart
 #define UART_NUM DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)
 
 BUILD_ASSERT(UART_NUM <= MAX_UART_DEVICES,
