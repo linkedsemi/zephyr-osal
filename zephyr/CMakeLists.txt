@@ -20,6 +20,7 @@ if(CONFIG_SOC_LSQSH_CPU2)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/overlay_fs.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/uart/uart_test.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/utils.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/truncate.c
     )
 elseif(CONFIG_SOC_LSQSH_CPU1)
     zephyr_library_sources(
@@ -31,8 +32,10 @@ elseif(CONFIG_BOARD_QEMU_RISCV32_QEMU_VIRT_RISCV32)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/overlay_fs.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/utils.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/gpio/gpio_pub.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/gpio/gpio_dev.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/random/random.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/ramdisk/ramdisk.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/truncate.c
     )
 
     zephyr_library_link_libraries(FS)
