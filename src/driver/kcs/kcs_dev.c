@@ -240,7 +240,7 @@ static ssize_t kcsdev_read(struct fs_file_t* zfp, void* ptr, size_t size)
 
     // 没有缓存，则直接请求api读取
     int ret = ipmi_read(client->dev, (uint8_t*)ptr, size);
-    if (ret != 0)
+    if (ret < 0)
     {
         LOG_ERROR("Read failed: %d", ret);
         return ret;
@@ -275,7 +275,7 @@ static ssize_t kcsdev_write(struct fs_file_t* zfp, const void* ptr, size_t size)
     }
 
     int ret = ipmi_write(client->dev, write_buf, size);
-    if (ret != 0)
+    if (ret < 0)
     {
         LOG_ERROR("write failed: %d", ret);
         return ret;
