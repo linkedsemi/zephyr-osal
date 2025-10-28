@@ -487,7 +487,7 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
 
             struct gpiohandle_data *data = va_arg(args, struct gpiohandle_data *);           
             __u32 port_value;
-            ret = gpio_port_get_raw(client->gpio_union.linehandle.gdev->dev, &port_value);
+            ret = gpio_port_get(client->gpio_union.linehandle.gdev->dev, &port_value);
             if (ret < 0) {
                 LOG_ERROR("[GPIODEV_IOCTL] GPIOHANDLE_GET_LINE_VALUES_IOCTL gpio_port_get_raw fail, ret=[%d]\n", ret);
                 return ret;
