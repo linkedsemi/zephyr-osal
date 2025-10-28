@@ -15,7 +15,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
 
-LOG_MODULE_REGISTER(kcs_dev, LOG_LEVEL_INF); // 注册日志模块
+LOG_MODULE_REGISTER(kcs_dev, CONFIG_LOG_DEFAULT_LEVEL); // 注册日志模块
 
 #define MAX_KCS_DEVICES 14 /* The maximum number of KCS devices */
 
@@ -59,7 +59,7 @@ static const char* getFileName(const char* filePath)
 static int kcsdev_open(struct fs_file_t* zfp, const char* file_name,
                        fs_mode_t mode)
 {
-    LOG_ERROR("kcsdev_open start----\n");
+    LOG_DBG("kcsdev_open start----\n");
     struct kcs_device_info* client = NULL;
 
     // 遍历所有 KCS 设备实例，找到对应的设备
@@ -101,13 +101,13 @@ static int kcsdev_open(struct fs_file_t* zfp, const char* file_name,
     zfp->filep = client;
     zfp->mp = &kcsfs_mnt;
 
-    LOG_ERROR("KCS device with name '%s' opened successfully\n", file_name);
+    LOG_DBG("KCS device with name '%s' opened successfully\n", file_name);
     return 0;
 }
 
 static int kcsdev_close(struct fs_file_t* zfp)
 {
-    LOG_ERROR("kcsdev_close start----\n");
+    LOG_DBG("kcsdev_close start----\n");
     if (zfp->filep)
     {
         struct kcs_device_info* client = zfp->filep;
@@ -116,7 +116,7 @@ static int kcsdev_close(struct fs_file_t* zfp)
     if (zfp->mp)
     {
         zfp->mp = NULL;
-        LOG_ERROR("Closed kcsfs mount");
+        LOG_DBG("Closed kcsfs mount");
     }
 
     return 0;
@@ -207,7 +207,7 @@ static int kcs_poll_update_ctx(struct kcs_device_info* kcsDev,
 // kcsdev_read：优先从设备文件"待取缓冲"返回，若没有消息则调用api读取
 static ssize_t kcsdev_read(struct fs_file_t* zfp, void* ptr, size_t size)
 {
-    LOG_ERROR("kcsdev_read start----\n");
+    LOG_DBG("kcsdev_read start----\n");
     struct kcs_device_info* client = zfp->filep;
 
     if (client == NULL)
@@ -234,7 +234,7 @@ static ssize_t kcsdev_read(struct fs_file_t* zfp, void* ptr, size_t size)
         // 清空"待取"消息
         client->rx_len = 0;
         atomic_set(&client->has_msg, 0);
-        LOG_ERROR("Read %zu bytes data (from devfile cache)", n);
+        LOG_DBG("Read %zu bytes data (from devfile cache)", n);
         return (ssize_t)n;
     }
 
@@ -246,13 +246,13 @@ static ssize_t kcsdev_read(struct fs_file_t* zfp, void* ptr, size_t size)
         return ret;
     }
 
-    LOG_ERROR("Read %zu bytes data %s", size, ptr);
+    LOG_DBG("Read %zu bytes data %s", size, ptr);
     return size;
 }
 
 static ssize_t kcsdev_write(struct fs_file_t* zfp, const void* ptr, size_t size)
 {
-    LOG_ERROR("kcsdev_write start----\n");
+    LOG_DBG("kcsdev_write start----\n");
     struct kcs_device_info* client = zfp->filep;
     const uint8_t* write_buf = (const uint8_t*)ptr;
 
@@ -281,7 +281,7 @@ static ssize_t kcsdev_write(struct fs_file_t* zfp, const void* ptr, size_t size)
         return ret;
     }
 
-    LOG_ERROR("KCS writing %zu bytes data %s", size, write_buf);
+    LOG_DBG("KCS writing %zu bytes data %s", size, write_buf);
     return size;
 }
 
@@ -306,7 +306,7 @@ static int kcsdev_ioctl(struct fs_file_t* zfp, unsigned long request,
     switch (request)
     {
         case ZFD_IOCTL_SET_LOCK:
-            LOG_ERROR("ioctl ZFD_IOCTL_SET_LOCK----\n");
+            LOG_DBG("ioctl ZFD_IOCTL_SET_LOCK----\n");
             return 0;
         case IPMI_BMC_IOCTL_SET_SMS_ATN:
             ipmi_update_status(client->dev, KCS_STATUS_SMS_ATN,
@@ -366,7 +366,7 @@ static int kcsdev_mount(struct fs_mount_t* mountp)
         }
     }
 
-    LOG_ERROR("KCS device mounted successfully\n");
+    LOG_DBG("KCS device mounted successfully\n");
     return 0;
 }
 static int kcsdev_unmount(struct fs_mount_t* mountp)
@@ -378,7 +378,7 @@ static int kcsdev_unmount(struct fs_mount_t* mountp)
     }
 
     mountp->mnt_point = NULL;
-    LOG_ERROR("KCS device unmounted successfully\n");
+    LOG_DBG("KCS device unmounted successfully\n");
     return 0;
 }
 
@@ -392,7 +392,7 @@ static int kcsdev_opendir(struct fs_dir_t* dp, const char* path)
 
     dp->dirp = &kcs_index;
 
-    LOG_ERROR("KCS device opendir successfully\n");
+    LOG_DBG("KCS device opendir successfully\n");
     return 0;
 }
 
@@ -413,7 +413,7 @@ static int kcsdev_readdir(struct fs_dir_t* dp, struct fs_dirent* entry)
 
     // 没有更多条目
     memset(entry, 0, sizeof(struct fs_dirent));
-    LOG_ERROR("No more KCS devices to list\n");
+    LOG_DBG("No more KCS devices to list\n");
     return 0;
 }
 
@@ -428,7 +428,7 @@ static int kcsdev_closedir(struct fs_dir_t* dp)
     kcs_index = 0;
     dp->dirp = NULL;
 
-    LOG_ERROR("KCS device closedir successfully\n");
+    LOG_DBG("KCS device closedir successfully\n");
     return 0;
 }
 
@@ -453,7 +453,7 @@ static int kcsdev_stat(struct fs_mount_t* mountp, const char* path,
                 // 是 KCS 设备（按 label 匹配）
                 entry->type = FS_DIR_ENTRY_FILE;
                 entry->size = 0;
-                LOG_ERROR("KCS device stat successfully\n");
+                LOG_DBG("KCS device stat successfully\n");
                 return 0;
             }
         }
@@ -461,7 +461,7 @@ static int kcsdev_stat(struct fs_mount_t* mountp, const char* path,
         return -EINVAL;
     }
 
-    LOG_ERROR("KCS device stat successfully\n");
+    LOG_DBG("KCS device stat successfully\n");
     return 0;
 }
 
@@ -483,9 +483,9 @@ static const struct fs_file_system_t kcsdev_fs = {
 
 static int kcs_dev_init(void)
 {
-    LOG_ERROR("kcs /dev entries driver\n");
+    LOG_DBG("kcs /dev entries driver\n");
 
-    LOG_ERROR("kcs_num = %d\n", KCS_NUM);
+    LOG_DBG("kcs_num = %d\n", KCS_NUM);
 
     // 初始化每个设备的 poll 信号与轮询工作
     for (int i = 0; i < KCS_NUM; i++)
@@ -504,17 +504,17 @@ static int kcs_dev_init(void)
     {
         if (kcs_devices[i].dev->name != NULL)
         {
-            LOG_ERROR("kcs_devices[%d].dev->name = %s\n", i,
+            LOG_DBG("kcs_devices[%d].dev->name = %s\n", i,
                       kcs_devices[i].dev->name);
         }
         if (kcs_devices[i].label != NULL)
         {
-            LOG_ERROR("kcs_devices[%d].label = %s\n", i, kcs_devices[i].label);
+            LOG_DBG("kcs_devices[%d].label = %s\n", i, kcs_devices[i].label);
         }
     }
 
     kcsfs_mnt.mnt_point = KCS_MNT_POINT;
-    LOG_ERROR("kcsfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n",
+    LOG_DBG("kcsfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n",
               kcsfs_mnt.type, kcsfs_mnt.mnt_point, kcsfs_mnt.fs_data);
 
     int rc = fs_mount(&kcsfs_mnt);
@@ -530,7 +530,7 @@ static int kcs_dev_init(void)
 
 static int kcs_init(void)
 {
-    LOG_ERROR("kcs_init----------start\n");
+    LOG_DBG("kcs_init----------start\n");
 
     int rc = fs_register(FS_KCS, &kcsdev_fs);
     if (rc < 0)
@@ -539,7 +539,7 @@ static int kcs_init(void)
     }
     else
     {
-        LOG_ERROR("kcsfs fs registered\n");
+        LOG_DBG("kcsfs fs registered\n");
     }
 
     rc = kcs_dev_init();
@@ -549,7 +549,7 @@ static int kcs_init(void)
         return rc;
     }
 
-    LOG_ERROR("kcs_init----------end\n");
+    LOG_DBG("kcs_init----------end\n");
     return rc;
 }
 
