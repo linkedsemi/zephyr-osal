@@ -3,6 +3,13 @@
 #include <stdint.h>
 #include <byteswap.h>
 
+#undef BYTE_ORDER
+#undef LITTLE_ENDIAN
+#undef BIG_ENDIAN
+#define BYTE_ORDER -1
+#define LITTLE_ENDIAN -1
+#define BIG_ENDIAN 1
+
 // uint16_t htobe16(uint16_t value);
 // inline uint16_t htole16(uint16_t value)
 // {
