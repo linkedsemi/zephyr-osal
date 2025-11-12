@@ -54,17 +54,11 @@ typedef struct gpio_dev{
     MyUnion gpio_union;
 } gpio_dev;
 
-struct gpio_dev linefd_dev[LINE_MAX] ={
-    {
-        .type = LINEHANDLE
-    }
-};
+__attribute__((section("PSRAM")))
+struct gpio_dev linefd_dev[LINE_MAX];
 
-struct gpio_dev lineevtfd_dev[LINEEVENT_MAX] = {
-    {
-        .type = LINEEVT
-    }
-};
+__attribute__((section("PSRAM")))
+struct gpio_dev lineevtfd_dev[LINEEVENT_MAX];
 
 #define INIT_GPIO_LINE_NAMES_ARRAY(inst)                                        \
     static const char *gpio_line_names_##inst[] =  \
@@ -102,7 +96,7 @@ SYS_INIT(init_gpio_line_names, POST_KERNEL, 70);
     }                                                   \
 },
 
-struct gpio_dev gpio_devices[] = {
+const struct gpio_dev gpio_devices[] = {
     DT_INST_FOREACH_STATUS_OKAY(GPIO_DEVICE_PROCESS)};
 
 #define GPIOCHIP_NUM ARRAY_SIZE(gpio_devices)
@@ -732,6 +726,14 @@ static int gpio_dev_init()
 {
 
     LOG_DBG("gpiochip_num = %d\n", GPIOCHIP_NUM);
+
+    for (int i=0; i < LINE_MAX; i++){
+        linefd_dev[i].type = LINEHANDLE;
+    };
+
+    for (int i=0; i < LINEEVENT_MAX; i++){
+        lineevtfd_dev[i].type = LINEEVT;
+    };
 
 	// 输出gpio设备name和label信息
 	for (int i=0; i < GPIOCHIP_NUM; i++){
