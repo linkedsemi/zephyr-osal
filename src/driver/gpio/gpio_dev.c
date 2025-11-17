@@ -96,7 +96,7 @@ SYS_INIT(init_gpio_line_names, POST_KERNEL, 70);
     }                                                   \
 },
 
-const struct gpio_dev gpio_devices[] = {
+struct gpio_dev gpio_devices[] = {
     DT_INST_FOREACH_STATUS_OKAY(GPIO_DEVICE_PROCESS)};
 
 #define GPIOCHIP_NUM ARRAY_SIZE(gpio_devices)
