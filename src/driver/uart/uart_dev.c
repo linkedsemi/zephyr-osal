@@ -428,6 +428,14 @@ static int uartdev_mount(struct fs_mount_t *mountp)
 
 static int uartdev_unmount(struct fs_mount_t *mountp)
 {
+    if (mountp->mnt_point == NULL)
+    {
+        LOG_ERROR("Invalid mount point\n");
+        return -EINVAL;
+    }
+
+    mountp->mnt_point = NULL;
+    LOG_DBG("UART device unmounted successfully!\n");
     return 0;
 }
 
