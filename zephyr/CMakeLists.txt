@@ -24,6 +24,8 @@ if(CONFIG_SOC_LSQSH_CPU2)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/hwmon/hwmon.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/hwmon/hwmon_ls.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/hwmon/test.c
+
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/stub/tcsendbreak.c
     )
 elseif(CONFIG_SOC_LSQSH_CPU1)
     zephyr_library_sources(
@@ -39,6 +41,8 @@ elseif(CONFIG_BOARD_QEMU_RISCV32_QEMU_VIRT_RISCV32)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/random/random.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/ramdisk/ramdisk.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/truncate.c
+
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/stub/tcsendbreak.c
     )
 
     zephyr_library_link_libraries(FS)
