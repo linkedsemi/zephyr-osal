@@ -54,11 +54,17 @@ typedef struct gpio_dev{
     MyUnion gpio_union;
 } gpio_dev;
 
-__attribute__((section("PSRAM")))
-struct gpio_dev linefd_dev[LINE_MAX];
+struct gpio_dev linefd_dev[LINE_MAX] ={
+    {
+        .type = LINEHANDLE
+    }
+};
 
-__attribute__((section("PSRAM")))
-struct gpio_dev lineevtfd_dev[LINEEVENT_MAX];
+struct gpio_dev lineevtfd_dev[LINEEVENT_MAX] = {
+    {
+        .type = LINEEVT
+    }
+};
 
 #define INIT_GPIO_LINE_NAMES_ARRAY(inst)                                        \
     static const char *gpio_line_names_##inst[] =  \
@@ -276,7 +282,7 @@ static int gpiodev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t 
 
         zfp->filep = client;
     } else if (type == LINEHANDLE) {
-        LOG_ERROR("LINEHANDLE Mode value: %x\n", mode);
+        LOG_DBG("LINEHANDLE Mode value: %x\n", mode);
         int idx = -1;
         if (strncmp(file_name, "/dev/gpio/gpio-linehandle", 25) == 0) {         
             if (sscanf(file_name, "/dev/gpio/gpio-linehandle%d", &idx) == 1 && idx >= 0) {
@@ -367,7 +373,7 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
     {
         case GPIO_GET_CHIPINFO_IOCTL: {
             struct gpio_dev *client = (struct gpio_dev *)zfp->filep;
-            if (client && client->type != GPIOCHIP) {
+            if (client == NULL || client->type != GPIOCHIP) {
                 LOG_ERROR("GPIO_GET_CHIPINFO_IOCTL [client == NULL] or [client->type != GPIOCHIP]\n");
                 return -EINVAL;
             }
@@ -383,7 +389,7 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
     
         case GPIO_GET_LINEINFO_IOCTL: {// 需要修改，可能我进行挂载的时候要产生line的虚拟文件，按照pin的数量，产生lines
             struct gpio_dev *client = (struct gpio_dev *)zfp->filep;
-            if (client && client->type != GPIOCHIP) {
+            if (client == NULL || client->type != GPIOCHIP) {
                 LOG_ERROR("GPIO_GET_LINEINFO_IOCTL [client == NULL] or [client->type != GPIOCHIP]\n");
                 return -EINVAL;
             }
@@ -425,7 +431,7 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
 
         case GPIO_GET_LINEHANDLE_IOCTL: {
             struct gpio_dev *client = (struct gpio_dev *)zfp->filep;
-            if (client && client->type != GPIOCHIP) {
+            if (client == NULL || client->type != GPIOCHIP) {
                 LOG_ERROR("GPIO_GET_LINEINFO_IOCTL [client == NULL] or [client->type != GPIOCHIP]\n");
                 return -EINVAL;
             }
@@ -469,7 +475,7 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
         case GPIOHANDLE_GET_LINE_VALUES_IOCTL: {
             struct gpio_dev *client = (struct gpio_dev *)zfp->filep;
 
-            if (client && client->type != LINEHANDLE) {
+            if (client == NULL || client->type != LINEHANDLE) {
                 LOG_ERROR("GPIOHANDLE_GET_LINE_VALUES_IOCTL [client == NULL] or [client->type != LINEHANDLE]\n");
                 return -EINVAL;
             }
@@ -497,7 +503,7 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
 
         case GPIOHANDLE_SET_LINE_VALUES_IOCTL: {
             struct gpio_dev *client = (struct gpio_dev *)zfp->filep;           
-            if (client && client->type != LINEHANDLE) {
+            if (client == NULL || client->type != LINEHANDLE) {
                 LOG_ERROR("GPIOHANDLE_SET_LINE_VALUES_IOCTL [client == NULL] or [client->type != LINEHANDLE]\n");
                 return -EINVAL;
             }
@@ -555,7 +561,7 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
         }
         case GPIOHANDLE_SET_CONFIG_IOCTL: {
             struct gpio_dev *client = (struct gpio_dev *)zfp->filep;
-            if (client && client->type != LINEHANDLE) {
+            if (client == NULL || client->type != LINEHANDLE) {
                 LOG_ERROR("GPIOHANDLE_SET_CONFIG_IOCTL [client == NULL] or [client->type != LINEHANDLE]\n");
                 return -EINVAL;
             }
@@ -581,7 +587,7 @@ static int gpiodev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list a
         }
         case GPIO_GET_LINEEVENT_IOCTL: {
             struct gpio_dev *client = (struct gpio_dev *)zfp->filep;
-            if (client && client->type != LINEEVT) {
+            if (client == NULL || client->type != LINEEVT) {
                 return -EINVAL;
             }
            
@@ -726,14 +732,6 @@ static int gpio_dev_init()
 {
 
     LOG_DBG("gpiochip_num = %d\n", GPIOCHIP_NUM);
-
-    for (int i=0; i < LINE_MAX; i++){
-        linefd_dev[i].type = LINEHANDLE;
-    };
-
-    for (int i=0; i < LINEEVENT_MAX; i++){
-        lineevtfd_dev[i].type = LINEEVT;
-    };
 
 	// 输出gpio设备name和label信息
 	for (int i=0; i < GPIOCHIP_NUM; i++){
