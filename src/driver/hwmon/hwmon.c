@@ -56,7 +56,7 @@ static struct k_poll_signal hwmon_poll_signal = K_POLL_SIGNAL_INITIALIZER(hwmon_
 static int get_hwmon_device(const char *path, char *output, size_t output_size)
 {
 	const size_t base_len = strlen(HWMON_MNT_POINT);
-	
+
 	if (strncmp(path, HWMON_MNT_POINT, base_len) != 0) {
 		return -1;
 	}
@@ -64,11 +64,11 @@ static int get_hwmon_device(const char *path, char *output, size_t output_size)
 	const char *hwmon_start = path + base_len + 1;
 	const char *current = hwmon_start;
 	size_t length = 0;
-	
+
 	while (*current && *current != '/' && length < output_size - 1) {
 		output[length++] = *current++;
 	}
-	
+
 	output[length] = '\0';
 	return (length > 0) ? 0 : -1;
 }
@@ -89,7 +89,7 @@ static int get_hwmon_attr(const char *path, char *result, size_t max_len)
 
 	const char *input_start = last_slash + 1;
 	size_t len = strlen(input_start);
-	
+
 	if (len >= max_len) {
 		return -1;
 	}
@@ -102,7 +102,7 @@ static int get_hwmon_attr(const char *path, char *result, size_t max_len)
 static int hwmondev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t mode)
 {
 	LOG_DBG("Opening hwmon device: %s", file_name);
-	
+
 	struct hwmon_device_info *client = NULL;
 	char device_name[20];
 	char attr_name[20];
@@ -177,14 +177,14 @@ static int hwmondev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t
 static int hwmondev_close(struct fs_file_t *zfp)
 {
 	LOG_DBG("Closing hwmon device");
-	
+
 	if (zfp->filep) {
 		struct hwmon_file_handle *handle = zfp->filep;
 		atomic_set(&handle->opened, 0);
 		k_free(handle);
 		zfp->filep = NULL;
 	}
-	
+
 	if (zfp->mp) {
 		zfp->mp = NULL;
 		LOG_DBG("HWMON mount closed");
@@ -198,7 +198,7 @@ static ssize_t hwmondev_read_adc(const struct device *adc, unsigned int channel_
 	if (!adc || !result) {
 		return -EINVAL;
 	}
-	
+
 	uint16_t *buffer = k_malloc(sizeof(uint16_t));
 	if (!buffer) {
 		LOG_ERROR("Failed to allocate ADC buffer");
@@ -232,16 +232,18 @@ static ssize_t hwmondev_read_adc(const struct device *adc, unsigned int channel_
 		return ret;
 	}
 
-	*result = buffer[0];
+	*result = (buffer[0] * 1400) / 4095;
+	// 打印ADC设备名称、通道ID和读取结果
+	LOG_DBG("ADC Device Name: %s, Channel ID: %u, Result: %u", adc->name, channel_id, *result);
 	k_free(buffer);
-	
+
 	return 0;
 }
 
 static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 {
 	LOG_DBG("Reading from hwmon device");
-	
+
 	if (!zfp || !ptr) {
 		LOG_ERROR("Invalid parameters");
 		return -EINVAL;
@@ -277,19 +279,19 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 	ssize_t len = 0;
 
 	switch (cfg->class) {
-	case HWMON_FAN:  // TODO: 
+	case HWMON_FAN:  // TODO:
 		break;
 
 	case HWMON_ADC:
 		if (strlen(attr_name) > 0) {
 			unsigned int channel_index;
 			char attr_type[16];
-			
+
 			if (sscanf(attr_name, "in%u_%15s", &channel_index, attr_type) >= 1) {
 				if (channel_index > 0 && (channel_index-1) < cfg->in_num) {
 					if (strcmp(attr_type, "input") == 0) {
 						uint16_t adc_value = 0;
-						int ret = hwmondev_read_adc(cfg->in[channel_index-1].dev, 
+						int ret = hwmondev_read_adc(cfg->in[channel_index-1].dev,
 						                           cfg->in[channel_index-1].channel, &adc_value);
 						if (ret == 0) {
 							len = snprintf((char *)ptr, size, "%u\n", adc_value);
@@ -307,10 +309,10 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 			}
 		}
 		break;
-		
+
 	case HWMON_TEMP: // TODO:
 		break;
-		
+
 	case HWMON_SENSOR:	// TODO:
 		break;
 	default:
@@ -362,7 +364,7 @@ static int hwmon_poll_update_ctx(struct hwmon_file_handle *handle,
 static int hwmondev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list args)
 {
 	LOG_DBG("hwmon ioctl: 0x%lx", request);
-	
+
 	struct hwmon_file_handle *handle = zfp->filep;
 	if (!handle) {
 		LOG_ERROR("No client context");
@@ -372,30 +374,30 @@ static int hwmondev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list 
 	switch (request) {
 	case F_GETFL: // TODO:
 		return O_RDWR;
-		
+
 	case F_SETFL: {
 		int flags = va_arg(args, int);
 		handle->nonblocking = (flags & O_NONBLOCK) != 0;
 		LOG_DBG("Set nonblocking mode to %d", handle->nonblocking);
 		return 0;
 	}
-	
+
 	case ZFD_IOCTL_POLL_PREPARE: {
 		struct zvfs_pollfd *pfd = va_arg(args, struct zvfs_pollfd *);
 		struct k_poll_event **pev = va_arg(args, struct k_poll_event **);
 		struct k_poll_event *pev_end = va_arg(args, struct k_poll_event *);
 		return hwmon_poll_prepare_ctx(handle, pfd, pev, pev_end);
 	}
-	
+
 	case ZFD_IOCTL_POLL_UPDATE: {
 		struct zvfs_pollfd *pfd = va_arg(args, struct zvfs_pollfd *);
 		struct k_poll_event **pev = va_arg(args, struct k_poll_event **);
 		return hwmon_poll_update_ctx(handle, pfd, pev);
 	}
-	
+
 	case ZFD_IOCTL_SET_LOCK:
 		return 0;
-		
+
 	default:
 		LOG_ERROR("Unsupported ioctl request: 0x%lx", request);
 		return -ENOTTY;
@@ -407,7 +409,7 @@ static int hwmondev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list 
 static int hwmondev_mount(struct fs_mount_t *mountp)
 {
 	LOG_DBG("Mounting hwmon filesystem");
-	
+
 	if (!mountp || !mountp->mnt_point) {
 		LOG_ERROR("Invalid mount point");
 		return -EINVAL;
@@ -427,7 +429,7 @@ static int hwmondev_mount(struct fs_mount_t *mountp)
 static int hwmondev_unmount(struct fs_mount_t *mountp)
 {
 	LOG_DBG("Unmounting hwmon filesystem");
-	
+
 	if (!mountp || !mountp->mnt_point) {
 		LOG_ERROR("Invalid mount point");
 		return -EINVAL;
@@ -441,7 +443,7 @@ static int hwmondev_unmount(struct fs_mount_t *mountp)
 static int hwmondev_opendir(struct fs_dir_t *dp, const char *path)
 {
 	LOG_DBG("Opening directory: %s", path);
-	
+
 	if (!dp || !path) {
 		return -EINVAL;
 	}
@@ -452,26 +454,26 @@ static int hwmondev_opendir(struct fs_dir_t *dp, const char *path)
 		if (!ctx) {
 			return -ENOMEM;
 		}
-		
+
 		ctx->type = ROOT_DIR;
 		ctx->index = 0;
 		dp->dirp = ctx;
 		return 0;
 	}
-	
+
 	// 设备目录处理
 	const size_t base_len = strlen(HWMON_MNT_POINT);
 	if (strncmp(path, HWMON_MNT_POINT, base_len) == 0 && path[base_len] == '/') {
 		const char *dev_part = path + base_len + 1;
 		unsigned int device_index;
-		
+
 		if (sscanf(dev_part, "hwmon%u", &device_index) == 1) {
 			if (device_index < HWMON_NUM) {
 				struct hwmon_dir_ctx *ctx = k_malloc(sizeof(struct hwmon_dir_ctx));
 				if (!ctx) {
 					return -ENOMEM;
 				}
-				
+
 				ctx->type = DEVICE_DIR;
 				ctx->dev.devid = device_index;
 				ctx->dev.attr_idx = 0;
@@ -488,7 +490,7 @@ static int hwmondev_opendir(struct fs_dir_t *dp, const char *path)
 static int hwmondev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 {
 	LOG_DBG("Reading directory entry");
-	
+
 	if (!dp || !dp->dirp || !entry) {
 		LOG_ERROR("Invalid parameters");
 		return -EINVAL;
@@ -506,25 +508,25 @@ static int hwmondev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 			return 0;
 		}
 		break;
-		
+
 	case DEVICE_DIR:
 		if (ctx->dev.devid >= HWMON_NUM) {
 			LOG_ERROR("Invalid device ID: %zu", ctx->dev.devid);
 			return -EINVAL;
 		}
-		
+
 		const struct hwmon_device_info *dev = &hwmon_devices[ctx->dev.devid];
 		const struct hwmon_ls_config *cfg = hwmon_ls_get_config(dev->dev);
-		
+
 		if (!cfg) {
 			LOG_ERROR("Failed to get hwmon config for device %zu", ctx->dev.devid);
 			return -ENODEV;
 		}
-		
+
 		// 根据设备类型和当前属性索引生成属性信息
 		if (ctx->dev.attr_idx < cfg->in_num) {
 			char attr_name[MAX_ATTR_NAME_LEN];
-			
+
 			switch (cfg->class) {
 			case HWMON_FAN:	// TODO:
 				break;
@@ -539,7 +541,7 @@ static int hwmondev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 				LOG_ERROR("Unsupported device class: %d", cfg->class);
 				return -ENOTTY;
 			}
-			
+
 			strncpy(entry->name, attr_name, sizeof(entry->name) - 1);
 			entry->name[sizeof(entry->name) - 1] = '\0';
 			entry->type = FS_DIR_ENTRY_FILE;
@@ -556,12 +558,12 @@ static int hwmondev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 			return 0;
 		}
 		break;
-		
+
 	default:
 		LOG_ERROR("Unknown directory type: %d", ctx->type);
 		return -EINVAL;
 	}
-	
+
 	// 结束遍历
 	memset(entry, 0, sizeof(*entry));
 	return 0;
@@ -570,16 +572,16 @@ static int hwmondev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 static int hwmondev_closedir(struct fs_dir_t *dp)
 {
 	LOG_DBG("Closing directory");
-	
+
 	if (!dp) {
 		return -EINVAL;
 	}
-	
+
 	if (dp->dirp) {
 		k_free(dp->dirp);
 		dp->dirp = NULL;
 	}
-	
+
 	return 0;
 }
 
@@ -588,7 +590,7 @@ hwmondev_statvfs 函数实现文件系统的统计信息查询功能，用于返
 hwmon不占用实际存储空间，只是提供传感器数据访问接口,这些统计信息对于hwmon这类虚拟文件系统没有实际意义.
 初始化stat是为了填充 fs_statvfs 结构体的所有相关字段,避免上层调用报错.
 */
-static int hwmondev_statvfs(struct fs_mount_t *mountp, const char *path, 
+static int hwmondev_statvfs(struct fs_mount_t *mountp, const char *path,
                             struct fs_statvfs *stat)
 {
 	if (!stat) {
@@ -599,15 +601,15 @@ static int hwmondev_statvfs(struct fs_mount_t *mountp, const char *path,
 	stat->f_frsize = 1;  // 分配单元大小
 	stat->f_blocks = 8192; // 总块数
 	stat->f_bfree = 8192;  // 空闲块数
-	
+
 	return 0;
 }
 
-static int hwmondev_stat(struct fs_mount_t *mountp, const char *path, 
+static int hwmondev_stat(struct fs_mount_t *mountp, const char *path,
                          struct fs_dirent *entry)
 {
 	LOG_DBG("Stat path: %s", path);
-	
+
 	if (!mountp || !path || !entry) {
 		return -EINVAL;
 	}
@@ -618,7 +620,7 @@ static int hwmondev_stat(struct fs_mount_t *mountp, const char *path,
 		entry->size = 0;
 		return 0;
 	}
-	
+
 	// 设备目录和属性文件
 	const size_t base_len = strlen(HWMON_MNT_POINT);
 	if (strncmp(path, HWMON_MNT_POINT, base_len) == 0 && path[base_len] == '/') {
@@ -631,20 +633,20 @@ static int hwmondev_stat(struct fs_mount_t *mountp, const char *path,
 			if (dev_index < HWMON_NUM) {
 				const struct hwmon_device_info *dev = &hwmon_devices[dev_index];
 				const struct hwmon_ls_config *cfg = hwmon_ls_get_config(dev->dev);
-				
+
 				if (!cfg) {
 					LOG_ERROR("Failed to get hwmon config for device %u", dev_index);
 					return -ENODEV;
 				}
-				
+
 				// 验证属性有效性
 				switch (cfg->class) {
 					case HWMON_FAN:	// TODO:
 						break;
-						
+
 					case HWMON_TEMP: // TODO:
 						break;
-						
+
 					case HWMON_ADC: {
 						unsigned int sensor_num;
 						char attr_type[16];
@@ -660,7 +662,7 @@ static int hwmondev_stat(struct fs_mount_t *mountp, const char *path,
 					case HWMON_SENSOR: // TODO:
 						break;
 				}
-				
+
 				// 检查name属性
 				if (strcmp(attr_name, "name") == 0) {
 					entry->type = FS_DIR_ENTRY_FILE;
@@ -678,7 +680,7 @@ static int hwmondev_stat(struct fs_mount_t *mountp, const char *path,
 			}
 		}
 	}
-	
+
 	LOG_ERROR("Invalid path for stat: %s", path);
 	return -ENOENT;
 }
@@ -736,7 +738,7 @@ static int hwmon_init(void)
 		LOG_ERROR("Failed to register hwmon filesystem: %d", rc);
 		return rc;
 	}
-	
+
 	LOG_DBG("hwmon filesystem registered");
 
 	rc = hwmon_dev_init();
