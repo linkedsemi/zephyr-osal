@@ -14,6 +14,7 @@
 #include <zephyr/fs/fs_sys.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/atomic.h>
+#include <zephyr/zvfs/eventfd.h>
 
 LOG_MODULE_REGISTER(kcs_dev, CONFIG_LOG_DEFAULT_LEVEL); // 注册日志模块
 
@@ -112,6 +113,7 @@ static int kcsdev_close(struct fs_file_t* zfp)
     {
         struct kcs_device_info* client = zfp->filep;
         atomic_set(&client->opened, 0);
+        client->eventfd = -1;
     }
     if (zfp->mp)
     {
@@ -149,59 +151,20 @@ static void kcs_rx_poll_work(struct k_work* work)
             client->rx_len = (size_t)ret;
             atomic_set(&client->has_msg, 1);
             // 唤醒等 POLLIN 的用户
-            k_poll_signal_raise(&client->poll_sig, 1);
+            if (client->eventfd >= 0)
+            {
+                int err = zvfs_eventfd_write(client->eventfd, 1);
+                if (err < 0)
+                {
+                    LOG_ERROR("eventfd write failed: %d (fd=%d)", errno,
+                              client->eventfd);
+                }
+            }
         }
-    }
 
-    // 重新安排下一轮
+        // 重新安排下一轮
+    }
     k_work_schedule(dwork, K_MSEC(KCS_POLL_INTERVAL_MS));
-}
-
-// poll 的 prepare/update：使用 k_poll_signal 通知 POLLIN
-static int kcs_poll_prepare_ctx(struct kcs_device_info* kcsDev,
-                                struct zvfs_pollfd* pfd,
-                                struct k_poll_event** pev,
-                                struct k_poll_event* pev_end)
-{
-    if (pfd->events & ZVFS_POLLIN)
-    {
-        if (*pev == pev_end)
-        {
-            return -ENOMEM;
-        }
-        (*pev)->signal = &kcsDev->poll_sig;
-        (*pev)->type = K_POLL_TYPE_SIGNAL;
-        (*pev)->mode = K_POLL_MODE_NOTIFY_ONLY;
-        (*pev)->state = K_POLL_STATE_NOT_READY;
-
-        // 如果此时已有待取消息，直接让 poll 立刻返回
-        if (atomic_get(&kcsDev->has_msg))
-        {
-            k_poll_signal_raise(&kcsDev->poll_sig, 1);
-        }
-
-        (*pev)++;
-    }
-    return 0;
-}
-
-static int kcs_poll_update_ctx(struct kcs_device_info* kcsDev,
-                               struct zvfs_pollfd* pfd,
-                               struct k_poll_event** pev)
-{
-    if (pfd->events & ZVFS_POLLIN)
-    {
-        unsigned int signaled = 0;
-        int result = 0;
-        k_poll_signal_check(&kcsDev->poll_sig, &signaled, &result);
-        if (signaled)
-        {
-            pfd->revents |= ZVFS_POLLIN;
-            k_poll_signal_reset(&kcsDev->poll_sig);
-        }
-        (*pev)++;
-    }
-    return 0;
 }
 
 // kcsdev_read：优先从设备文件"待取缓冲"返回，若没有消息则调用api读取
@@ -299,7 +262,7 @@ static int kcsdev_ioctl(struct fs_file_t* zfp, unsigned long request,
     LOG_DBG("kcsdev_ioctl start----\n");
     struct kcs_device_info* client = zfp->filep;
     int ret = 0;
-
+    int fd = -1;
     if (!client)
         return -EINVAL;
 
@@ -319,27 +282,15 @@ static int kcsdev_ioctl(struct fs_file_t* zfp, unsigned long request,
             ipmi_force_abort(client->dev);
             break;
         case ZFD_IOCTL_POLL_PREPARE:
-        {
-            LOG_DBG("ioctl ZFD_IOCTL_POLL_PREPARE----\n");
-            struct zvfs_pollfd* pfd;
-            struct k_poll_event** pev;
-            struct k_poll_event* pev_end;
-            pfd = va_arg(args, struct zvfs_pollfd*);
-            pev = va_arg(args, struct k_poll_event**);
-            pev_end = va_arg(args, struct k_poll_event*);
-            ret = kcs_poll_prepare_ctx(client, pfd, pev, pev_end);
+            fd = va_arg(args, int);
+            if (fd < 0)
+            {
+                LOG_ERROR("Invalid eventfd: %d\n", fd);
+                return -EINVAL;
+            }
+            client->eventfd = fd;
+            LOG_DBG("KCS: registered eventfd %d\n", fd);
             break;
-        }
-        case ZFD_IOCTL_POLL_UPDATE:
-        {
-            LOG_DBG("ioctl ZFD_IOCTL_POLL_UPDATE----\n");
-            struct zvfs_pollfd* pfd;
-            struct k_poll_event** pev;
-            pfd = va_arg(args, struct zvfs_pollfd*);
-            pev = va_arg(args, struct k_poll_event**);
-            ret = kcs_poll_update_ctx(client, pfd, pev);
-            break;
-        }
         default:
             ret = -EINVAL;
             break;
@@ -490,7 +441,6 @@ static int kcs_dev_init(void)
     // 初始化每个设备的 poll 信号与轮询工作
     for (int i = 0; i < KCS_NUM; i++)
     {
-        k_poll_signal_init(&kcs_devices[i].poll_sig);
         atomic_set(&kcs_devices[i].has_msg, 0);
         kcs_devices[i].rx_len = 0;
         k_work_init_delayable(&kcs_devices[i].rx_poller, kcs_rx_poll_work);
@@ -505,7 +455,7 @@ static int kcs_dev_init(void)
         if (kcs_devices[i].dev->name != NULL)
         {
             LOG_DBG("kcs_devices[%d].dev->name = %s\n", i,
-                      kcs_devices[i].dev->name);
+                    kcs_devices[i].dev->name);
         }
         if (kcs_devices[i].label != NULL)
         {
@@ -514,8 +464,8 @@ static int kcs_dev_init(void)
     }
 
     kcsfs_mnt.mnt_point = KCS_MNT_POINT;
-    LOG_DBG("kcsfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n",
-              kcsfs_mnt.type, kcsfs_mnt.mnt_point, kcsfs_mnt.fs_data);
+    LOG_DBG("kcsfs_mnt: type: %d, mnt_point: %s, fs_data: %p\n", kcsfs_mnt.type,
+            kcsfs_mnt.mnt_point, kcsfs_mnt.fs_data);
 
     int rc = fs_mount(&kcsfs_mnt);
     if (rc != 0)
