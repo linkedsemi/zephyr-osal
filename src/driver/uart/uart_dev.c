@@ -26,7 +26,7 @@ LOG_MODULE_REGISTER(uart_dev, LOG_LEVEL_INF);
 
 //#define DT_DRV_COMPAT linkedsemi_ls_uart
 // #define DT_DRV_COMPAT ns16550
-#define DT_DRV_COMPAT linkedsemi_vuart
+#define DT_DRV_COMPAT linkedsemi_ls_host_vuart
 #define UART_NUM DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)
 
 BUILD_ASSERT(UART_NUM <= MAX_UART_DEVICES,
@@ -455,6 +455,7 @@ static const struct fs_file_system_t uart_fs = {
     .stat = uartdev_stat, // fs cd访问
 };
 
+extern void host_vuart_mode_set(const struct device*, bool, bool);
 static int uart_dev_init(void)
 {
     LOG_INF("uart_num = %d\n", UART_NUM);
@@ -464,6 +465,7 @@ static int uart_dev_init(void)
             LOG_ERROR("UART device %s not ready", uart_devices[i].label);
             return -ENODEV;
         }
+        host_vuart_mode_set(uart_devices[i].dev, true, true);
     }
 
     /* 挂载文件系统 */
