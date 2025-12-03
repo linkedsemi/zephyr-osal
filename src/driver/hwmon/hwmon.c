@@ -193,57 +193,87 @@ static int hwmondev_close(struct fs_file_t *zfp)
 	return 0;
 }
 
-static ssize_t hwmondev_read_adc(const struct device *adc, unsigned int channel_id, uint16_t *result)
+static uint8_t ch1[] = {0, 1, 10, 11, 12};          // ADC1通道
+static uint8_t ch2[] = {0, 1, 2, 8, 9, 10, 11, 12};  // ADC2通道
+
+/**
+ * 设置ADC通道配置
+ */
+static enum adc_reference ADC_Channel_setCfg(const struct device* adc, uint8_t channel_id)
 {
-	if (!adc || !result) {
-		return -EINVAL;
-	}
+    struct adc_channel_cfg channel_config = {
+        .reference = ADC_REF_INTERNAL,
+        .acquisition_time = ADC_SAMPLETIME_15CYCLES,
+        .channel_id = channel_id,
+    };
+    adc_channel_setup(adc, &channel_config);
+    return channel_config.reference;
+}
 
-	uint16_t *buffer;             // 缓冲区指针
-	size_t buf_size = 16 * sizeof(uint16_t);
+/**
+ * 配置ADC通道
+ */
+static int configure_adc_channels(const struct device* adc, const uint8_t* channels, size_t num_channels)
+{
+    for (size_t i = 0; i < num_channels; i++) {
+        ADC_Channel_setCfg(adc, channels[i]);
+    }
+    return 0;
+}
 
-	buffer = k_malloc(buf_size);
-	if (!buffer) {
-		LOG_ERROR("Failed to allocate ADC buffer");
-		return -ENOMEM;
-	}
+/**
+ * 读取ADC值
+ */
+static ssize_t hwmondev_read_adc(const struct device* adc, unsigned int channel_id, uint16_t* result)
+{
+    if (!adc || !result) {
+        return -EINVAL;
+    }
 
-	// 配置ADC通道
-	struct adc_channel_cfg channel_config = {
-		.channel_id = channel_id,
-		.reference = ADC_REF_INTERNAL,
-		.acquisition_time = ADC_SAMPLETIME_15CYCLES,
-	};
+    // 定义缓冲区
+    uint16_t buffer[14]; // 栈分配，避免动态内存分配
+    struct adc_sequence sequence = {
+        .buffer = buffer,
+        .buffer_size = sizeof(buffer),
+        .options = NULL,
+    };
 
-	int ret = adc_channel_setup(adc, &channel_config);
-	if (ret) {
-		LOG_ERROR("ADC channel setup failed: %d", ret);
-		k_free(buffer);
-		return ret;
-	}
+    // 根据设备名称配置通道
+    if (strcmp(adc->name, "adc@4008b000") == 0) {
+        configure_adc_channels(adc, ch1, ARRAY_SIZE(ch1));
+    } else if (strcmp(adc->name, "adc@4008b400") == 0) {
+        configure_adc_channels(adc, ch2, ARRAY_SIZE(ch2));
+    } else {
+        LOG_ERROR("Unsupported ADC device: %s", adc->name);
+        return -ENODEV;
+    }
 
-	// 配置采样序列
-	struct adc_sequence sequence = {
-		.buffer = buffer,
-		.buffer_size = sizeof(uint16_t),
-	};
+    // 执行ADC读取
+    int ret = adc_read(adc, &sequence);
+    if (ret) {
+        LOG_ERROR("ADC read failed: %d", ret);
+        return ret;
+    }
 
-	ret = adc_read(adc, &sequence);
-	if (ret) {
-		LOG_ERROR("ADC read failed: %d", ret);
-		k_free(buffer);
-		return ret;
-	}
+    // 查找对应通道的ADC值
+    uint16_t adc_value = 0;
+    const uint8_t* channels = strcmp(adc->name, "adc@4008b000") == 0 ? ch1 : ch2;
+    size_t num_channels = strcmp(adc->name, "adc@4008b000") == 0 ? ARRAY_SIZE(ch1) : ARRAY_SIZE(ch2);
 
-	*result = (buffer[0] * 1400) / 4095;
-	// 打印ADC设备名称、通道ID和读取结果
-	for(int i = 0; i < 13; i++){
-	    LOG_ERROR("ADC Device Name: %s, Channel ID: %u, Result: %u", adc->name, channel_id, buffer[i]);
-	}
+    for (size_t i = 0; i < num_channels; i++) {
+        if (channel_id == channels[i]) {
+            adc_value = buffer[i];
+            break;
+        }
+    }
 
-	k_free(buffer);
+    // 计算结果并返回
+    *result = (adc_value * 1400) / 4095;
 
-	return 0;
+    // 日志输出
+    LOG_DBG("ADC Device: %s, Channel ID: %u, Value: %u", adc->name, channel_id, adc_value);
+
+    return 0;
 }
 
 static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
