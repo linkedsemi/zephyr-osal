@@ -199,7 +199,10 @@ static ssize_t hwmondev_read_adc(const struct device *adc, unsigned int channel_
 		return -EINVAL;
 	}
 
-	uint16_t *buffer = k_malloc(sizeof(uint16_t));
+	uint16_t *buffer;             // 缓冲区指针
+	size_t buf_size = 16 * sizeof(uint16_t);
+
+	buffer = k_malloc(buf_size);
 	if (!buffer) {
 		LOG_ERROR("Failed to allocate ADC buffer");
 		return -ENOMEM;
@@ -234,7 +237,10 @@ static ssize_t hwmondev_read_adc(const struct device *adc, unsigned int channel_
 
 	*result = (buffer[0] * 1400) / 4095;
 	// 打印ADC设备名称、通道ID和读取结果
-	LOG_DBG("ADC Device Name: %s, Channel ID: %u, Result: %u", adc->name, channel_id, *result);
+	for(int i = 0; i < 13; i++){
+	    LOG_ERROR("ADC Device Name: %s, Channel ID: %u, Result: %u", adc->name, channel_id, buffer[i]);
+	}
+
 	k_free(buffer);
 
 	return 0;
