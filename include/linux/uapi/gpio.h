@@ -500,7 +500,7 @@ struct gpioevent_request
  * GPIO event types
  */
 #define GPIOEVENT_EVENT_RISING_EDGE 0x01
-// #define GPIOEVENT_EVENT_FALLING_EDGE 0x02
+#define GPIOEVENT_EVENT_FALLING_EDGE 0x02
 
 /**
  * struct gpioevent_data - The actual event being pushed to userspace
