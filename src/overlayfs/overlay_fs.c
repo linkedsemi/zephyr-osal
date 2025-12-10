@@ -489,6 +489,8 @@ int fs_dir_read(struct overlay_dirp *dirp, struct fs_dir_t* dp, const char* part
             add_dir(dirp, &entry);
         }
     }
+
+    return 0;
 }
 
 static int overlay_opendir(struct fs_dir_t* dp, const char* path)
