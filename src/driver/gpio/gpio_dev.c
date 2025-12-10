@@ -1225,7 +1225,6 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
             }
             return 0;
         }
-
         case ZFD_IOCTL_POLL_UPDATE:
         {
             struct zvfs_pollfd* pfd;
@@ -1274,6 +1273,10 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
             }
 
             return 0;
+        }
+        case ZFD_IOCTL_SET_LOCK:
+        {
+            return -EOPNOTSUPP;
         }
         default:
             LOG_ERROR("Unsupported ioctl request: %lu", request);
