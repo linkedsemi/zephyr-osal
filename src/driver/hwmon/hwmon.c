@@ -194,7 +194,11 @@ static int hwmondev_close(struct fs_file_t *zfp)
 }
 
 static uint8_t ch1[] = {0, 1, 10, 11, 12};          // ADC1通道
+#ifdef CONFIG_BOARD_ALIMOC31
+static uint8_t ch2[] = {12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0};  // ADC2通道
+#else
 static uint8_t ch2[] = {0, 1, 2, 8, 9, 10, 11, 12};  // ADC2通道
+#endif
 
 /**
  * 设置ADC通道配置
