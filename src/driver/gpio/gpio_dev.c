@@ -25,7 +25,8 @@ typedef struct gpio_device_info
     const struct device* dev;
     __u16 pin_count;
     time_t timestamp;
-    atomic_t opened;
+    atomic_t ref_count;
+    // atomic_t opened;
     const char** line_names;
 } gpio_device_info;
 
@@ -102,7 +103,7 @@ SYS_INIT(init_gpio_line_names, POST_KERNEL, 70);
                         .label = DT_INST_PROP(inst, label),                    \
                         .pin_count = DT_INST_PROP(inst, ngpios),               \
                         .timestamp = 0,                                        \
-                        .opened = ATOMIC_INIT(0),                              \
+                        .ref_count = ATOMIC_INIT(0),  /* 初始化引用计数为0 */   \
                         .line_names = gpio_line_names_##inst,                  \
                     }}},
 
@@ -342,26 +343,30 @@ static int gpiodev_open(struct fs_file_t* zfp, const char* file_name,
             return -ENODEV;
         }
 
-        if (!atomic_cas(&client->gpio_union.chip.opened, 0, 1))
-        {
-            LOG_ERROR("device name is opened");
-            return -EINVAL;
-        }
+        // if (!atomic_cas(&client->gpio_union.chip.opened, 0, 1))
+        // {
+        //     LOG_ERROR("device name is opened");
+        //     return -EINVAL;
+        // }
 
         if (!device_is_ready(client->gpio_union.chip.dev))
         {
             LOG_ERROR("Error: GPIO device with name '%s' is not ready\n",
                       file_name);
-            atomic_set(&client->gpio_union.chip.opened, 0);
+            // atomic_set(&client->gpio_union.chip.opened, 0);
             return -ENODEV;
         }
 
         if (zfp->mp == NULL)
         {
             LOG_ERROR("Error: File system mount point is NULL\n");
-            atomic_set(&client->gpio_union.chip.opened, 0);
+            // atomic_set(&client->gpio_union.chip.opened, 0);
             return -EINVAL;
         }
+
+        atomic_inc(&client->gpio_union.chip.ref_count);
+        LOG_DBG("GPIOCHIP %s opened, ref_count=%d", client->gpio_union.chip.label,
+                atomic_get(&client->gpio_union.chip.ref_count));
 
         zfp->filep = client;
     }
@@ -484,15 +489,23 @@ static int gpiodev_close(struct fs_file_t* zfp)
     struct gpio_dev* client = zfp->filep;
     if (client->type == GPIOCHIP)
     {
-        if (zfp->filep)
+        struct gpio_device_info *chip = &client->gpio_union.chip;
+
+        int ref_count = atomic_dec(&chip->ref_count);
+        LOG_DBG("GPIOCHIP %s closed, ref_count=%d (after dec)",
+                chip->label, ref_count);
+        if (ref_count == 0)
         {
-            atomic_set(&client->gpio_union.chip.opened, 0);
-            LOG_DBG("GPIOCHIP zfp->filep");
-        }
-        if (zfp->mp)
-        {
-            zfp->mp = NULL;
-            LOG_DBG("GPIOCHIP Closed gpiofs mount");
+            LOG_DBG("GPIOCHIP %s ref_count=0, release resources", chip->label);            
+            if (zfp->filep) {
+                zfp->filep = NULL;
+                LOG_DBG("GPIOCHIP zfp->filep cleared");
+            }           
+            if (zfp->mp) {
+                zfp->mp = NULL;
+                LOG_DBG("GPIOCHIP Closed gpiofs mount");
+            }
+            chip->timestamp = 0;
         }
     }
     else if (client->type == LINEHANDLE)
