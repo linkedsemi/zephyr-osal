@@ -703,7 +703,6 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
             chipinfo->lines = client->gpio_union.chip.pin_count;
             return 0;
         }
-
         case GPIO_GET_LINEINFO_IOCTL:
         {
             struct gpio_dev* client = (struct gpio_dev*)zfp->filep;
@@ -758,7 +757,6 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
             LOG_DBG("Line %d name: %s", offset, line_info->name);
             return 0;
         }
-
         case GPIO_GET_LINEHANDLE_IOCTL:
         {
             struct gpio_dev* client = (struct gpio_dev*)zfp->filep;
@@ -837,50 +835,93 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
         case GPIOHANDLE_GET_LINE_VALUES_IOCTL:
         {
             struct gpio_dev* client = (struct gpio_dev*)zfp->filep;
-            if (client == NULL || client->type != LINEHANDLE)
+            if (client == NULL ||
+                (client->type != LINEHANDLE && client->type != LINEEVT))
             {
                 LOG_ERROR(
-                    "GPIO_GET_LINEHANDLE_IOCTL [client == NULL] or [client->type != LINEHANDLE]\n");
+                    "GPIOHANDLE_GET_LINE_VALUES_IOCTL [client == NULL] or [client->type != LINEHANDLE and client->type != LINEEVT]\n");
                 return -EINVAL;
             }
 
             struct gpiohandle_data* data = va_arg(args,
                                                   struct gpiohandle_data*);
-            __u32 port_value;
-            ret = gpio_port_get(client->gpio_union.linehandle.gdev->dev,
-                                &port_value);
-            if (ret < 0)
+            if (client->type == LINEHANDLE)
             {
-                LOG_ERROR(
-                    "GPIOHANDLE_GET_LINE_VALUES_IOCTL gpio_port_get fail, ret=[%d]\n",
-                    ret);
-                return ret;
-            }
-
-            __u32 lines = client->gpio_union.linehandle.lines;
-            if (lines == 0 || lines > CONFIG_GPIO_MAX_PINS_PER_DEVICE)
-            {
-                LOG_ERROR(
-                    "GPIOHANDLE_SET_LINE_VALUES_IOCTL invalid lines=[%u]\n",
-                    lines);
-                return -EINVAL;
-            }
-            for (int i = 0; i < lines; i++)
-            {
-                __u32 offset = client->gpio_union.linehandle.lineoffsets[i];
-                if (offset >= CONFIG_GPIO_MAX_PINS_PER_DEVICE ||
-                    offset == (unsigned int)-1)
+                __u32 port_value;
+                ret = gpio_port_get(client->gpio_union.linehandle.gdev->dev,
+                                    &port_value);
+                if (ret < 0)
                 {
                     LOG_ERROR(
-                        "GPIOHANDLE_GET_LINE_VALUES_IOCTL i=[%d] offset=[%u] exceed max=[%d]\n",
-                        i, offset, CONFIG_GPIO_MAX_PINS_PER_DEVICE - 1);
+                        "GPIOHANDLE_GET_LINE_VALUES_IOCTL gpio_port_get fail, ret=[%d]\n",
+                        ret);
+                    return ret;
+                }
+
+                __u32 lines = client->gpio_union.linehandle.lines;
+                if (lines == 0 || lines > CONFIG_GPIO_MAX_PINS_PER_DEVICE)
+                {
+                    LOG_ERROR(
+                        "GPIOHANDLE_SET_LINE_VALUES_IOCTL invalid lines=[%u]\n",
+                        lines);
                     return -EINVAL;
                 }
-                // 提取第 offset 个引脚的状态
-                data->values[i] = (port_value >> offset) & 0x1;
-                LOG_DBG(
-                    "GPIOHANDLE_GET_LINE_VALUES_IOCTL i =[%d], offset =[%u],data->values[i]=[%u], port_value=[%u]\n",
-                    i, offset, data->values[i], port_value);
+                for (int i = 0; i < lines; i++)
+                {
+                    __u32 offset = client->gpio_union.linehandle.lineoffsets[i];
+                    if (offset >= CONFIG_GPIO_MAX_PINS_PER_DEVICE ||
+                        offset == (unsigned int)-1)
+                    {
+                        LOG_ERROR(
+                            "GPIOHANDLE_GET_LINE_VALUES_IOCTL i=[%d] offset=[%u] exceed max=[%d]\n",
+                            i, offset, CONFIG_GPIO_MAX_PINS_PER_DEVICE - 1);
+                        return -EINVAL;
+                    }
+                    // 提取第 offset 个引脚的状态
+                    data->values[i] = (port_value >> offset) & 0x1;
+                    LOG_DBG(
+                        "GPIOHANDLE_GET_LINE_VALUES_IOCTL i =[%d], offset =[%u],data->values[i]=[%u], port_value=[%u]\n",
+                        i, offset, data->values[i], port_value);
+                }
+            }
+            else if (client->type == LINEEVT)
+            {
+                __u32 port_value;
+                ret = gpio_port_get(client->gpio_union.lineevent.gdev->dev,
+                                    &port_value);
+                if (ret < 0)
+                {
+                    LOG_ERROR(
+                        "GPIOHANDLE_GET_LINE_VALUES_IOCTL gpio_port_get fail, ret=[%d]\n",
+                        ret);
+                    return ret;
+                }
+
+                __u32 lines = client->gpio_union.lineevent.lines;
+                if (lines == 0 || lines > CONFIG_GPIO_MAX_PINS_PER_DEVICE)
+                {
+                    LOG_ERROR(
+                        "GPIOHANDLE_SET_LINE_VALUES_IOCTL invalid lines=[%u]\n",
+                        lines);
+                    return -EINVAL;
+                }
+                for (int i = 0; i < lines; i++)
+                {
+                    __u32 offset = client->gpio_union.lineevent.lineoffset[i];
+                    if (offset >= CONFIG_GPIO_MAX_PINS_PER_DEVICE ||
+                        offset == (unsigned int)-1)
+                    {
+                        LOG_ERROR(
+                            "GPIOHANDLE_GET_LINE_VALUES_IOCTL i=[%d] offset=[%u] exceed max=[%d]\n",
+                            i, offset, CONFIG_GPIO_MAX_PINS_PER_DEVICE - 1);
+                        return -EINVAL;
+                    }
+                    // 提取第 offset 个引脚的状态
+                    data->values[i] = (port_value >> offset) & 0x1;
+                    LOG_DBG(
+                        "GPIOHANDLE_GET_LINE_VALUES_IOCTL i =[%d], offset =[%u],data->values[i]=[%u], port_value=[%u]\n",
+                        i, offset, data->values[i], port_value);
+                }
             }
             return 0;
         }
