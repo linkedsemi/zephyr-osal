@@ -333,8 +333,8 @@ static int i2cdev_ioctl_smbus(struct i2c_device_info *client, u8 read_write,
         }
         break;
     case I2C_SMBUS_I2C_BLOCK_DATA:
-		case_I2C_SMBUS_I2C_BLOCK_DATA:
-		 if (read_write == I2C_SMBUS_WRITE) {
+	case_I2C_SMBUS_I2C_BLOCK_DATA:
+	if (read_write == I2C_SMBUS_WRITE) {
             res = i2c_burst_write(client->dev, client->addr, command, &data->block[1], data->block[0]);
         } else {
             res = i2c_write_read(client->dev, client->addr, &command, 1, &data->block[1], data->block[0]);
@@ -403,7 +403,7 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 	case I2C_RDWR:
 	{
 		LOG_DBG("ioctl I2C_RDWR----\n");
-		
+
 		// rdwr_arg = va_arg(args, struct i2c_rdwr_ioctl_data);
 		struct i2c_rdwr_ioctl_data *rdwr_arg_ptr = va_arg(args, struct i2c_rdwr_ioctl_data *);
 		if (!rdwr_arg_ptr) {
@@ -438,7 +438,7 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 
 		return result;
 	}
-	case I2C_SMBUS: 
+	case I2C_SMBUS:
 	{
 		struct i2c_smbus_ioctl_data *data_arg_ptr = va_arg(args, struct i2c_smbus_ioctl_data *);
 		if (!data_arg_ptr) {
@@ -538,6 +538,21 @@ static int i2cdev_closedir(struct fs_dir_t *dp)
 	return 0;
 }
 
+static int i2cdev_statvfs(struct fs_mount_t *mountp, const char *path,
+                            struct fs_statvfs *stat)
+{
+	if (!stat) {
+		return -EINVAL;
+	}
+
+	stat->f_bsize = 1;   // 块大小
+	stat->f_frsize = 1;  // 分配单元大小
+	stat->f_blocks = 1; // 总块数
+	stat->f_bfree = 1;  // 空闲块数
+
+	return 0;
+}
+
 static int i2cdev_stat(struct fs_mount_t *mountp,
 					   const char *path, struct fs_dirent *entry)
 {
@@ -550,18 +565,30 @@ static int i2cdev_stat(struct fs_mount_t *mountp,
 	}
 	else
 	{
-		// 检查是否为 I2C 设备路径
-		uint8_t minor;
-		if (sscanf(path, "i2c-%hhu", &minor) == 1 && minor < I2C_NUM)
+		// 检查路径是否以 /dev/i2c/ 开头
+		const size_t base_len = strlen(I2C_MNT_POINT);
+		if (strncmp(path, I2C_MNT_POINT, base_len) == 0 && path[base_len] == '/')
 		{
-			// 是 I2C 设备
-			entry->type = FS_DIR_ENTRY_FILE;
-			entry->size = 0;
+			const char *subpath = path + base_len + 1;
+			uint8_t minor;
+
+			// 匹配设备路径格式：i2c-%hhu
+			if (sscanf(subpath, "i2c-%hhu", &minor) == 1 && minor < I2C_NUM)
+			{
+				// 是 I2C 设备
+				entry->type = FS_DIR_ENTRY_FILE;
+				entry->size = 0;
+			}
+			else
+			{
+				LOG_ERROR("Invalid I2C device path\n");
+				return -EINVAL;
+			}
 		}
 		else
 		{
-			LOG_ERROR("Invalid path\n");
-			return -EINVAL;
+			LOG_ERROR("Path does not belong to I2C mount point\n");
+			return -ENOENT;
 		}
 	}
 
@@ -583,6 +610,7 @@ static const struct fs_file_system_t i2cdev_fs = {
 	.readdir = i2cdev_readdir,	 // fs ls访问
 	.closedir = i2cdev_closedir, // fs ls访问
 	.stat = i2cdev_stat,		 // fs cd访问
+	.statvfs = i2cdev_statvfs,
 };
 
 static int i2c_dev_init(void)

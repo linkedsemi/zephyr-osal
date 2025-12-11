@@ -20,7 +20,7 @@
 
 LOG_MODULE_REGISTER(eeprom_dev, LOG_LEVEL_ERR); // 注册日志模块
 
-#define CONFIG_EEPROM_DEV_MAX_SIZE 256
+#define CONFIG_EEPROM_DEV_MAX_SIZE 65536
 
 #define DT_DRV_COMPAT atmel_at24
 
@@ -59,7 +59,7 @@ static int eepromdev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_
 
     // 直接验证文件名是否匹配
     if (strcmp(getFileName(file_name), EEPROM_LABEL) != 0) {
-        LOG_ERROR("Invalid EEPROM device name: %s (expected: %s)", 
+        LOG_ERROR("Invalid EEPROM device name: %s (expected: %s)",
                file_name, EEPROM_LABEL);
         return -ENODEV;
     }
@@ -99,7 +99,7 @@ static int eepromdev_close(struct fs_file_t *zfp)
     }
 
     struct eeprom_device_info *client = zfp->filep;
-    
+
     /* 原子操作确保线程安全 */
     if (client != NULL) {
         if (!atomic_cas(&client->opened, 1, 0)) {
@@ -258,7 +258,7 @@ static off_t eepromdev_tell(struct fs_file_t *fp)
  * @brief 挂载EEPROM虚拟文件系统
  * @param mountp 挂载配置指针
  * @return 0 成功，负数表示错误码
- * 
+ *
  * @retval -EINVAL 参数无效
  * @retval -ENODEV 设备未就绪
  * @retval -ENOENT 挂载点无效
@@ -370,6 +370,21 @@ static int eepromdev_closedir(struct fs_dir_t *dp)
     return 0;
 }
 
+static int eepromdev_statvfs(struct fs_mount_t *mountp, const char *path,
+                            struct fs_statvfs *stat)
+{
+	if (!stat) {
+		return -EINVAL;
+	}
+
+	stat->f_bsize = 1;   // 块大小
+	stat->f_frsize = 1;  // 分配单元大小
+	stat->f_blocks = 1; // 总块数
+	stat->f_bfree = 1;  // 空闲块数
+
+	return 0;
+}
+
 static int eepromdev_stat(struct fs_mount_t *mountp,
                          const char *path, struct fs_dirent *entry)
 {
@@ -411,6 +426,7 @@ static const struct fs_file_system_t eepromdev_fs = {
 	.readdir = eepromdev_readdir,	 // fs ls访问
 	.closedir = eepromdev_closedir, // fs ls访问
 	.stat = eepromdev_stat,		 // fs cd访问
+	.statvfs = eepromdev_statvfs,
 };
 
 static int eeprom_dev_init(void)

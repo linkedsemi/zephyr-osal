@@ -14,4 +14,4 @@ struct eeprom_device_info
 	atomic_t opened; // 原子操作
 };
 
-#define EEPROM_MNT_POINT "/sys/bus/i2c/devices/2-0050"
+#define EEPROM_MNT_POINT "/sys/bus/i2c/devices/2-0053"
