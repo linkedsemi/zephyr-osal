@@ -585,7 +585,7 @@ ro_close:
     }
 
 exit:
-    if (dirp)
+    if (rc && dirp)
     {
         free_dir(dirp);
         free(dirp);
