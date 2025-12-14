@@ -585,9 +585,10 @@ ro_close:
     }
 
 exit:
-    if (rc && dirp)
+    if (dirp)
     {
         free_dir(dirp);
+        free(dirp);
     }
     fs_unlock(data);
     return rc;
