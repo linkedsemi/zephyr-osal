@@ -27,9 +27,11 @@ static char* overlayfs_mnt_point = NULL;
 static char* rofs_mnt_point = NULL;
 static char* rwfs_mnt_point = NULL;
 
+/* Dummy objects for empty directory handling - related structures */
 const struct fs_dirent dummy_entry = {
     .type = FS_DIR_ENTRY_DIR, .name = {0}, .size = 0};
 const overlay_dir_t dummy_dir = {.next = NULL, .entry = dummy_entry};
+const struct overlay_dirp dummy_dirp = {.head = &dummy_dir, .readed_dir = NULL};
 
 LOG_MODULE_REGISTER(overlay_fs);
 
@@ -565,7 +567,7 @@ static int overlay_opendir(struct fs_dir_t* dp, const char* path)
     if (!dp->dirp)
     {
         // dir is empty, return dummy
-        dp->dirp = &dummy_dir;
+        dp->dirp = (struct overlay_dirp *)&dummy_dirp;
     }
 
 rw_close:
@@ -606,8 +608,12 @@ static int overlay_readdir(struct fs_dir_t* dp, struct fs_dirent* entry)
     if (dirp->readed_dir == NULL)
     {
         overlay_dir_t* dir = (overlay_dir_t*)dirp->head;
-        *entry = dir->entry;
-        dirp->readed_dir = dir;
+        if (dir != NULL) {
+            *entry = dir->entry;
+            dirp->readed_dir = dir;
+        } else {
+            entry->name[0] = '\0';
+        }
     }
     else
     {
