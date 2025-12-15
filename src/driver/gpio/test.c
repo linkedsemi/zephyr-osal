@@ -28,6 +28,11 @@
 #define READ_RETRY_MAX 50 // 读取事件最大重试次数（原30次，延长容错）
 #define COUNT_DOWN_INTERVAL 5 // 倒计时提示间隔(s)：提升用户操作体验
 #define INVALID_PIN 20        // 无效引脚（超出gpiochip7的16个引脚范围）
+// 新增：重复打开测试配置
+#define REOPEN_TEST_CNT 3     // 重复打开Chip的次数
+// 新增：重复获取句柄测试配置
+#define DUPLICATE_PIN 1       // 用于重复申请的测试引脚（gpioh-1）
+#define DUPLICATE_LABEL "test_duplicate" // 重复申请的消费者标签
 
 /************************** 全局变量 **************************/
 /**
@@ -71,8 +76,382 @@ static int test_event_abnormal(int chip_fd, uint32_t invalid_pin)
     return 0;
 }
 
-// ---------------------- 以下是你的GPIO配置/电平读写测试用例
-// ----------------------
+// 新增：重复获取LineHandle测试
+/**
+ * @brief 测试：同一引脚重复获取LineHandle
+ * @param chip_fd GPIO芯片设备fd
+ * @param pin 测试引脚
+ * @return 0=测试通过（第二次申请失败），-1=测试失败（第二次申请成功）
+ */
+static int test_duplicate_linehandle(int chip_fd, uint32_t pin)
+{
+    printk("\n===================================================\n");
+    printk("[TEST] 同一引脚重复获取LineHandle测试（引脚%d）开始\n", pin);
+    printk("测试逻辑：\n");
+    printk("  1. 第一次申请LineHandle（预期成功）\n");
+    printk("  2. 第二次申请同一引脚LineHandle（预期失败）\n");
+    printk("===================================================\n");
+
+    struct gpiohandle_request req1, req2;
+    memset(&req1, 0, sizeof(req1));
+    memset(&req2, 0, sizeof(req2));
+
+    // 第一次申请LineHandle
+    req1.lineoffsets[0] = pin;
+    req1.flags = GPIOHANDLE_REQUEST_INPUT;
+    req1.lines = 1;
+    strncpy(req1.consumer_label, DUPLICATE_LABEL "_1", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 第一次申请引脚%d的LineHandle...\n", pin);
+    if (ioctl(chip_fd, GPIO_GET_LINEHANDLE_IOCTL, &req1) < 0)
+    {
+        printk("[TEST] 失败：第一次申请LineHandle失败（errno=%d）\n", errno);
+        return -1;
+    }
+    printk("[TEST] 成功：第一次申请LineHandle成功（fd=%d）\n", req1.fd);
+
+    // 第二次申请同一引脚的LineHandle
+    req2.lineoffsets[0] = pin;
+    req2.flags = GPIOHANDLE_REQUEST_INPUT;
+    req2.lines = 1;
+    strncpy(req2.consumer_label, DUPLICATE_LABEL "_2", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 第二次申请引脚%d的LineHandle...\n", pin);
+    int ret = ioctl(chip_fd, GPIO_GET_LINEHANDLE_IOCTL, &req2);
+    if (ret >= 0)
+    {
+        printk("[TEST] 失败：第二次申请LineHandle成功（不符合预期，fd=%d）\n", req2.fd);
+        close(req1.fd);
+        close(req2.fd);
+        return -1;
+    }
+    printk("[TEST] 成功：第二次申请LineHandle失败（符合预期，errno=%d）\n", errno);
+
+    // 清理资源
+    close(req1.fd);
+    printk("\n[TEST] 同一引脚重复获取LineHandle测试结束（成功）\n");
+    printk("===================================================\n");
+    return 0;
+}
+
+// 新增：重复获取LineEvent测试
+/**
+ * @brief 测试：同一引脚重复获取LineEvent
+ * @param chip_fd GPIO芯片设备fd
+ * @param pin 测试引脚
+ * @return 0=测试通过（第二次申请失败），-1=测试失败（第二次申请成功）
+ */
+static int test_duplicate_lineevent(int chip_fd, uint32_t pin)
+{
+    printk("\n===================================================\n");
+    printk("[TEST] 同一引脚重复获取LineEvent测试（引脚%d）开始\n", pin);
+    printk("测试逻辑：\n");
+    printk("  1. 第一次申请LineEvent（预期成功）\n");
+    printk("  2. 第二次申请同一引脚LineEvent（预期失败）\n");
+    printk("===================================================\n");
+
+    struct gpioevent_request req1, req2;
+    memset(&req1, 0, sizeof(req1));
+    memset(&req2, 0, sizeof(req2));
+
+    // 第一次申请LineEvent
+    req1.lineoffset = pin;
+    req1.handleflags = GPIOHANDLE_REQUEST_INPUT;
+    req1.eventflags = GPIOEVENT_REQUEST_BOTH_EDGES;
+    strncpy(req1.consumer_label, DUPLICATE_LABEL "_1", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 第一次申请引脚%d的LineEvent...\n", pin);
+    if (ioctl(chip_fd, GPIO_GET_LINEEVENT_IOCTL, &req1) < 0)
+    {
+        printk("[TEST] 失败：第一次申请LineEvent失败（errno=%d）\n", errno);
+        return -1;
+    }
+    printk("[TEST] 成功：第一次申请LineEvent成功（fd=%d）\n", req1.fd);
+
+    // 第二次申请同一引脚的LineEvent
+    req2.lineoffset = pin;
+    req2.handleflags = GPIOHANDLE_REQUEST_INPUT;
+    req2.eventflags = GPIOEVENT_REQUEST_BOTH_EDGES;
+    strncpy(req2.consumer_label, DUPLICATE_LABEL "_2", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 第二次申请引脚%d的LineEvent...\n", pin);
+    int ret = ioctl(chip_fd, GPIO_GET_LINEEVENT_IOCTL, &req2);
+    if (ret >= 0)
+    {
+        printk("[TEST] 失败：第二次申请LineEvent成功（不符合预期，fd=%d）\n", req2.fd);
+        close(req1.fd);
+        close(req2.fd);
+        return -1;
+    }
+    printk("[TEST] 成功：第二次申请LineEvent失败（符合预期，errno=%d）\n", errno);
+
+    // 清理资源
+    close(req1.fd);
+    printk("\n[TEST] 同一引脚重复获取LineEvent测试结束（成功）\n");
+    printk("===================================================\n");
+    return 0;
+}
+
+// 新增：LineHandle与LineEvent互斥测试
+/**
+ * @brief 测试：同一引脚先获取LineHandle再获取LineEvent（互斥验证）
+ * @param chip_fd GPIO芯片设备fd
+ * @param pin 测试引脚
+ * @return 0=测试通过（LineEvent申请失败），-1=测试失败（LineEvent申请成功）
+ */
+static int test_handle_event_mutex(int chip_fd, uint32_t pin)
+{
+    printk("\n===================================================\n");
+    printk("[TEST] LineHandle与LineEvent互斥测试（引脚%d）开始\n", pin);
+    printk("测试逻辑：\n");
+    printk("  1. 先申请LineHandle（预期成功）\n");
+    printk("  2. 再申请同一引脚LineEvent（预期失败）\n");
+    printk("  3. 释放LineHandle后，重新申请LineEvent（预期成功）\n");
+    printk("===================================================\n");
+
+    struct gpiohandle_request h_req;
+    struct gpioevent_request e_req1, e_req2;
+    memset(&h_req, 0, sizeof(h_req));
+    memset(&e_req1, 0, sizeof(e_req1));
+    memset(&e_req2, 0, sizeof(e_req2));
+
+    // 步骤1：申请LineHandle
+    h_req.lineoffsets[0] = pin;
+    h_req.flags = GPIOHANDLE_REQUEST_INPUT;
+    h_req.lines = 1;
+    strncpy(h_req.consumer_label, DUPLICATE_LABEL "_handle", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 申请引脚%d的LineHandle...\n", pin);
+    if (ioctl(chip_fd, GPIO_GET_LINEHANDLE_IOCTL, &h_req) < 0)
+    {
+        printk("[TEST] 失败：LineHandle申请失败（errno=%d）\n", errno);
+        return -1;
+    }
+    printk("[TEST] 成功：LineHandle申请成功（fd=%d）\n", h_req.fd);
+
+    // 步骤2：申请同一引脚的LineEvent（预期失败）
+    e_req1.lineoffset = pin;
+    e_req1.handleflags = GPIOHANDLE_REQUEST_INPUT;
+    e_req1.eventflags = GPIOEVENT_REQUEST_BOTH_EDGES;
+    strncpy(e_req1.consumer_label, DUPLICATE_LABEL "_event1", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 申请已占用引脚%d的LineEvent...\n", pin);
+    int ret = ioctl(chip_fd, GPIO_GET_LINEEVENT_IOCTL, &e_req1);
+    if (ret >= 0)
+    {
+        printk("[TEST] 失败：LineEvent申请成功（不符合预期，fd=%d）\n", e_req1.fd);
+        close(h_req.fd);
+        close(e_req1.fd);
+        return -1;
+    }
+    printk("[TEST] 成功：LineEvent申请失败（符合预期，errno=%d）\n", errno);
+
+    // 步骤3：释放LineHandle后重新申请LineEvent（预期成功）
+    printk("[TEST] 释放LineHandle（fd=%d）...\n", h_req.fd);
+    close(h_req.fd);
+
+    e_req2.lineoffset = pin;
+    e_req2.handleflags = GPIOHANDLE_REQUEST_INPUT;
+    e_req2.eventflags = GPIOEVENT_REQUEST_BOTH_EDGES;
+    strncpy(e_req2.consumer_label, DUPLICATE_LABEL "_event2", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 释放LineHandle后，重新申请引脚%d的LineEvent...\n", pin);
+    ret = ioctl(chip_fd, GPIO_GET_LINEEVENT_IOCTL, &e_req2);
+    if (ret < 0)
+    {
+        printk("[TEST] 失败：释放LineHandle后LineEvent申请失败（errno=%d）\n", errno);
+        return -1;
+    }
+    printk("[TEST] 成功：释放LineHandle后LineEvent申请成功（fd=%d）\n", e_req2.fd);
+
+    // 清理资源
+    close(e_req2.fd);
+    printk("\n[TEST] LineHandle与LineEvent互斥测试结束（成功）\n");
+    printk("===================================================\n");
+    return 0;
+}
+
+// 新增：LineEvent与LineHandle互斥反向测试
+/**
+ * @brief 测试：同一引脚先获取LineEvent再获取LineHandle（互斥验证）
+ * @param chip_fd GPIO芯片设备fd
+ * @param pin 测试引脚
+ * @return 0=测试通过（LineHandle申请失败），-1=测试失败（LineHandle申请成功）
+ */
+static int test_event_handle_mutex(int chip_fd, uint32_t pin)
+{
+    printk("\n===================================================\n");
+    printk("[TEST] LineEvent与LineHandle互斥反向测试（引脚%d）开始\n", pin);
+    printk("测试逻辑：\n");
+    printk("  1. 先申请LineEvent（预期成功）\n");
+    printk("  2. 再申请同一引脚LineHandle（预期失败）\n");
+    printk("  3. 释放LineEvent后，重新申请LineHandle（预期成功）\n");
+    printk("===================================================\n");
+
+    struct gpioevent_request e_req;
+    struct gpiohandle_request h_req1, h_req2;
+    memset(&e_req, 0, sizeof(e_req));
+    memset(&h_req1, 0, sizeof(h_req1));
+    memset(&h_req2, 0, sizeof(h_req2));
+
+    // 步骤1：申请LineEvent
+    e_req.lineoffset = pin;
+    e_req.handleflags = GPIOHANDLE_REQUEST_INPUT;
+    e_req.eventflags = GPIOEVENT_REQUEST_BOTH_EDGES;
+    strncpy(e_req.consumer_label, DUPLICATE_LABEL "_event", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 申请引脚%d的LineEvent...\n", pin);
+    if (ioctl(chip_fd, GPIO_GET_LINEEVENT_IOCTL, &e_req) < 0)
+    {
+        printk("[TEST] 失败：LineEvent申请失败（errno=%d）\n", errno);
+        return -1;
+    }
+    printk("[TEST] 成功：LineEvent申请成功（fd=%d）\n", e_req.fd);
+
+    // 步骤2：申请同一引脚的LineHandle（预期失败）
+    h_req1.lineoffsets[0] = pin;
+    h_req1.flags = GPIOHANDLE_REQUEST_INPUT;
+    h_req1.lines = 1;
+    strncpy(h_req1.consumer_label, DUPLICATE_LABEL "_handle1", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 申请已占用引脚%d的LineHandle...\n", pin);
+    int ret = ioctl(chip_fd, GPIO_GET_LINEHANDLE_IOCTL, &h_req1);
+    if (ret >= 0)
+    {
+        printk("[TEST] 失败：LineHandle申请成功（不符合预期，fd=%d）\n", h_req1.fd);
+        close(e_req.fd);
+        close(h_req1.fd);
+        return -1;
+    }
+    printk("[TEST] 成功：LineHandle申请失败（符合预期，errno=%d）\n", errno);
+
+    // 步骤3：释放LineEvent后重新申请LineHandle（预期成功）
+    printk("[TEST] 释放LineEvent（fd=%d）...\n", e_req.fd);
+    close(e_req.fd);
+
+    h_req2.lineoffsets[0] = pin;
+    h_req2.flags = GPIOHANDLE_REQUEST_INPUT;
+    h_req2.lines = 1;
+    strncpy(h_req2.consumer_label, DUPLICATE_LABEL "_handle2", GPIO_MAX_NAME_SIZE - 1);
+
+    printk("[TEST] 释放LineEvent后，重新申请引脚%d的LineHandle...\n", pin);
+    ret = ioctl(chip_fd, GPIO_GET_LINEHANDLE_IOCTL, &h_req2);
+    if (ret < 0)
+    {
+        printk("[TEST] 失败：释放LineEvent后LineHandle申请失败（errno=%d）\n", errno);
+        return -1;
+    }
+    printk("[TEST] 成功：释放LineEvent后LineHandle申请成功（fd=%d）\n", h_req2.fd);
+
+    // 清理资源
+    close(h_req2.fd);
+    printk("\n[TEST] LineEvent与LineHandle互斥反向测试结束（成功）\n");
+    printk("===================================================\n");
+    return 0;
+}
+
+// 新增：重复打开Chip测试用例
+/**
+ * @brief 重复打开GPIO Chip测试
+ * @details 验证同一Chip可多次打开（不关闭）、多次close仅最后一次释放资源
+ * @param chip_path Chip设备路径（如"/dev/gpio/gpiochip7"）
+ * @return 0=测试成功，-1=测试失败
+ */
+static int test_reopen_chip(const char* chip_path)
+{
+    printk("\n===================================================\n");
+    printk("[TEST] 重复打开Chip测试（路径：%s）开始\n", chip_path);
+    printk("测试逻辑：\n");
+    printk("  1. 连续%d次打开同一Chip（不关闭）\n", REOPEN_TEST_CNT);
+    printk("  2. 验证每次打开的FD有效且可执行IOCTL\n");
+    printk("  3. 逐次关闭FD，验证非最后一次close后仍可重新打开\n");
+    printk("===================================================\n");
+
+    int fd_array[REOPEN_TEST_CNT];
+    int ret = 0;
+
+    // 步骤1：连续多次打开同一Chip
+    for (int i = 0; i < REOPEN_TEST_CNT; i++)
+    {
+        fd_array[i] = open(chip_path, O_RDWR | O_CLOEXEC);
+        if (fd_array[i] < 0)
+        {
+            printk("[TEST] 第%d次打开Chip失败（errno=%d）\n", i+1, errno);
+            // 关闭已打开的FD，避免泄漏
+            for (int j = 0; j < i; j++) {
+                close(fd_array[j]);
+            }
+            return -1;
+        }
+        printk("[TEST] 第%d次打开Chip成功（fd=%d）\n", i+1, fd_array[i]);
+
+        // 验证FD有效性：执行IOCTL读取Chip信息
+        struct gpiochip_info chipinfo;
+        memset(&chipinfo, 0, sizeof(chipinfo));
+        if (ioctl(fd_array[i], GPIO_GET_CHIPINFO_IOCTL, &chipinfo) < 0)
+        {
+            printk("[TEST] 第%d次FD执行IOCTL失败（errno=%d）\n", i+1, errno);
+            for (int j = 0; j <= i; j++) {
+                close(fd_array[j]);
+            }
+            return -1;
+        }
+        printk("[TEST] 第%d次FD验证成功：Chip名称=%s，引脚数=%u\n",
+               i+1, chipinfo.name, chipinfo.lines);
+        k_sleep(K_SECONDS(1));
+    }
+
+    // 步骤2：逐次关闭FD，验证资源释放逻辑
+    printk("\n[TEST] 开始逐次关闭FD（共%d次）\n", REOPEN_TEST_CNT);
+    for (int i = 0; i < REOPEN_TEST_CNT; i++)
+    {
+        int close_ret = close(fd_array[i]);
+        if (close_ret < 0)
+        {
+            printk("[TEST] 第%d次关闭FD（fd=%d）失败（errno=%d）\n",
+                   i+1, fd_array[i], errno);
+            ret = -1;
+            continue;
+        }
+        printk("[TEST] 第%d次关闭FD（fd=%d）成功\n", i+1, fd_array[i]);
+
+        // 非最后一次close：验证仍可重新打开
+        if (i < REOPEN_TEST_CNT - 1)
+        {
+            int temp_fd = open(chip_path, O_RDWR | O_CLOEXEC);
+            if (temp_fd < 0)
+            {
+                printk("[TEST] 非最后一次close后，重新打开Chip失败（errno=%d）\n", errno);
+                ret = -1;
+            }
+            else
+            {
+                printk("[TEST] 非最后一次close后，重新打开Chip成功（temp_fd=%d）\n", temp_fd);
+                close(temp_fd);
+            }
+        }
+        k_sleep(K_SECONDS(1));
+    }
+
+    // 步骤3：验证最后一次close后仍可正常打开
+    int final_fd = open(chip_path, O_RDWR | O_CLOEXEC);
+    if (final_fd < 0)
+    {
+        printk("[TEST] 最后一次close后，重新打开Chip失败（errno=%d）\n", errno);
+        ret = -1;
+    }
+    else
+    {
+        printk("[TEST] 最后一次close后，重新打开Chip成功（final_fd=%d）\n", final_fd);
+        close(final_fd);
+    }
+
+    printk("\n[TEST] 重复打开Chip测试结束（结果：%s）\n", ret==0?"成功":"失败");
+    printk("===================================================\n");
+    return ret;
+}
+
+// ---------------------- 以下是原有代码，无任何修改 ----------------------
 /**
  * @brief 测试：设置引脚电平 (GPIOHANDLE_SET_LINE_VALUES_IOCTL)
  */
@@ -486,7 +865,91 @@ int gpio_main_test()
     g_event_read_cnt = 0; // 重置事件计数
 
     // ==============================================
-    // 第一部分：GPIO配置/电平读写测试（gpiochip4）
+    // 新增：重复打开Chip测试
+    // ==============================================
+    printk("\n[TEST] ========== 开始：重复打开Chip测试 ==========\n");
+    const char* reopen_chip_path = "/dev/gpio/gpiochip7";
+    int reopen_ret = test_reopen_chip(reopen_chip_path);
+    if (reopen_ret != 0) {
+        printk("[TEST] 重复打开Chip测试失败！\n");
+        ret = reopen_ret;
+    } else {
+        printk("[TEST] 重复打开Chip测试通过！\n");
+    }
+    printk("[TEST] ========== 结束：重复打开Chip测试 ==========\n");
+    k_sleep(K_SECONDS(2));
+
+    // ==============================================
+    // 新增：重复获取句柄/互斥测试
+    // ==============================================
+    printk("\n[TEST] ========== 开始：重复获取句柄/互斥测试 ==========\n");
+    const char* mutex_chip_path = "/dev/gpio/gpiochip7";
+    int mutex_chip_fd = open(mutex_chip_path, O_RDWR | O_CLOEXEC);
+    if (mutex_chip_fd < 0)
+    {
+        printk("[TEST] 打开互斥测试用Chip失败（errno=%d）\n", errno);
+        ret = -1;
+    }
+    else
+    {
+        // 1. 同一引脚重复获取LineHandle测试
+        int dup_handle_ret = test_duplicate_linehandle(mutex_chip_fd, DUPLICATE_PIN);
+        if (dup_handle_ret != 0)
+        {
+            printk("[TEST] 同一引脚重复获取LineHandle测试失败！\n");
+            ret = dup_handle_ret;
+        }
+        else
+        {
+            printk("[TEST] 同一引脚重复获取LineHandle测试通过！\n");
+        }
+        k_sleep(K_SECONDS(2));
+
+        // 2. 同一引脚重复获取LineEvent测试
+        int dup_event_ret = test_duplicate_lineevent(mutex_chip_fd, DUPLICATE_PIN);
+        if (dup_event_ret != 0)
+        {
+            printk("[TEST] 同一引脚重复获取LineEvent测试失败！\n");
+            ret = dup_event_ret;
+        }
+        else
+        {
+            printk("[TEST] 同一引脚重复获取LineEvent测试通过！\n");
+        }
+        k_sleep(K_SECONDS(2));
+
+        // 3. LineHandle与LineEvent互斥测试
+        int handle_event_ret = test_handle_event_mutex(mutex_chip_fd, DUPLICATE_PIN);
+        if (handle_event_ret != 0)
+        {
+            printk("[TEST] LineHandle与LineEvent互斥测试失败！\n");
+            ret = handle_event_ret;
+        }
+        else
+        {
+            printk("[TEST] LineHandle与LineEvent互斥测试通过！\n");
+        }
+        k_sleep(K_SECONDS(2));
+
+        // 4. LineEvent与LineHandle互斥反向测试
+        int event_handle_ret = test_event_handle_mutex(mutex_chip_fd, DUPLICATE_PIN);
+        if (event_handle_ret != 0)
+        {
+            printk("[TEST] LineEvent与LineHandle互斥反向测试失败！\n");
+            ret = event_handle_ret;
+        }
+        else
+        {
+            printk("[TEST] LineEvent与LineHandle互斥反向测试通过！\n");
+        }
+
+        close(mutex_chip_fd);
+    }
+    printk("[TEST] ========== 结束：重复获取句柄/互斥测试 ==========\n");
+    k_sleep(K_SECONDS(2));
+
+    // ==============================================
+    // GPIO配置/电平读写测试（gpiochip4）
     // ==============================================
     printk("\n[TEST] ========== 开始：GPIO配置/电平读写测试 ==========\n");
     const char* chip4_path = "/dev/gpio/gpiochip4";
@@ -610,7 +1073,7 @@ int gpio_main_test()
     printk("[TEST] ========== 结束：GPIO配置/电平读写测试 ==========\n");
 
     // ==============================================
-    // 第二部分：GPIO事件监听测试（gpiochip6+gpiochip7）
+    // GPIO事件监听测试（gpiochip6+gpiochip7）
     // ==============================================
     printk("\n===================================================\n");
     printk("[TEST] GPIO Line Event 完整测试启动\n");
@@ -636,7 +1099,7 @@ int gpio_main_test()
     printk("[INFO] GPIO芯片打开成功（gpiochip7_fd=%d, gpiochip6_fd=%d）\n",
            fd_0, fd_1);
 
-    /********** 新增：执行异常测试（无效引脚） **********/
+    /********** 执行异常测试（无效引脚） **********/
     printk("\n[TEST] ========== 开始：GPIO事件异常场景测试 ==========\n");
     // 测试gpiochip7的无效引脚（20，超出16个引脚范围）
     int abnormal_ret = test_event_abnormal(fd_0, INVALID_PIN);
@@ -657,7 +1120,7 @@ int gpio_main_test()
     test_multi_pin_event(fd_0, fd_1);
 
     // test_single_pin_event(fd_1, 4, GPIOEVENT_REQUEST_FALLING_EDGE); //
-    // 单引脚测试（注释备用）
+    // 单引脚测试
 
     /********** 关闭设备（理论上不会执行到此处） **********/
     close(fd_0);

@@ -26,13 +26,13 @@ typedef struct gpio_device_info
     __u16 pin_count;
     time_t timestamp;
     atomic_t ref_count;
-    // atomic_t opened;
     const char** line_names;
+    atomic_t pin_occupied_mask;
 } gpio_device_info;
 
 struct linehandle_state
 {
-    const struct gpio_device_info* gdev;
+    struct gpio_device_info* gdev;
     __u32 lineoffsets[GPIOHANDLES_MAX];
     __u8 default_values[GPIOHANDLES_MAX];
     __u8 open_mode;
@@ -42,7 +42,7 @@ struct linehandle_state
 
 struct lineevent_state
 {
-    const struct gpio_device_info* gdev; // 关联的 GPIO 芯片信息
+    struct gpio_device_info* gdev; // 关联的 GPIO 芯片信息
     __u32 lineoffset[GPIOHANDLES_MAX];   // 监控的 line 偏移量（引脚号）
     __u32 lines;                         // 监控的 line 数量
     __u32 flags;                         // 事件触发标志（上升/下降/双边）
@@ -67,9 +67,8 @@ typedef struct gpio_dev
     MyUnion gpio_union;
 } gpio_dev;
 
-struct gpio_dev linefd_dev[LINE_MAX] = {{.type = LINEHANDLE}};
-
-struct gpio_dev lineevtfd_dev[LINEEVENT_MAX] = {{.type = LINEEVT}};
+struct gpio_dev linefd_dev[LINE_MAX] = {0};
+struct gpio_dev lineevtfd_dev[LINEEVENT_MAX] = {0};
 
 #define INIT_GPIO_LINE_NAMES_ARRAY(inst)                                       \
     static const char* gpio_line_names_##inst[] =                              \
@@ -96,6 +95,26 @@ static int init_gpio_line_names(void)
 
 SYS_INIT(init_gpio_line_names, POST_KERNEL, 70);
 
+static int line_dev_res_pool_init(void)
+{
+    for (int i = 0; i < LINE_MAX; i++)
+    {
+        linefd_dev[i].type = LINEHANDLE;
+        linefd_dev[i].gpio_union.linehandle.gdev = NULL;
+    }
+
+    for (int i = 0; i < LINEEVENT_MAX; i++)
+    {
+        lineevtfd_dev[i].type = LINEEVT;
+        lineevtfd_dev[i].gpio_union.lineevent.gdev = NULL;
+    }
+
+    LOG_DBG("Line handle/event resource pool initialized (LINE_MAX=%d, LINEEVENT_MAX=%d)",
+            LINE_MAX, LINEEVENT_MAX);
+    return 0;
+}
+SYS_INIT(line_dev_res_pool_init, POST_KERNEL, 71);
+
 #define GPIO_DEVICE_PROCESS(inst)                                              \
     {.type = GPIOCHIP,                                                         \
      .gpio_union = {.chip = {                                                  \
@@ -103,8 +122,9 @@ SYS_INIT(init_gpio_line_names, POST_KERNEL, 70);
                         .label = DT_INST_PROP(inst, label),                    \
                         .pin_count = DT_INST_PROP(inst, ngpios),               \
                         .timestamp = 0,                                        \
-                        .ref_count = ATOMIC_INIT(0),  /* 初始化引用计数为0 */   \
+                        .ref_count = ATOMIC_INIT(0), /* 初始化引用计数为0 */   \
                         .line_names = gpio_line_names_##inst,                  \
+                        .pin_occupied_mask = ATOMIC_INIT(0),                   \
                     }}},
 
 struct gpio_dev gpio_devices[] = {
@@ -148,16 +168,16 @@ void print_gpio_devices_info(void)
     }
 }
 
-int malloc_state(struct gpio_dev* client, struct gpio_dev* dev_array)
+int malloc_state(struct gpio_dev* client, struct gpio_dev* dev_array, int type)
 {
     if (!client || !dev_array)
     {
         LOG_ERROR("malloc_state Invalid input pointers.\n");
         return -1;
     }
-    LOG_DBG("malloc_state device type: %d\n", dev_array->type);
+    LOG_DBG("malloc_state device type: %d\n", type);
 
-    if (dev_array->type == LINEHANDLE)
+    if (type == LINEHANDLE)
     {
         for (int i = 0; i < LINE_MAX; i++)
         {
@@ -173,7 +193,7 @@ int malloc_state(struct gpio_dev* client, struct gpio_dev* dev_array)
             }
         }
     }
-    else if (dev_array->type == LINEEVT)
+    else if (type == LINEEVT)
     {
         for (int i = 0; i < LINEEVENT_MAX; i++)
         {
@@ -302,6 +322,53 @@ static int gpiodev_get_lineevt_idx(struct fs_file_t* zfp)
     return -1;
 }
 
+/**
+ * @brief 尝试占用引脚（原子位操作）
+ * @param chip GPIO芯片信息
+ * @param pin 引脚偏移量
+ * @return 0=成功，-EBUSY=已占用，-EINVAL=引脚非法
+ */
+static int gpio_pin_occupy(const struct gpio_device_info* chip, __u32 pin)
+{
+    if (!chip || pin >= chip->pin_count || pin >= 16)
+    {
+        LOG_ERROR("gpio_pin_occupy: invalid pin %u (max: %d)", pin,
+                  chip->pin_count);
+        return -EINVAL;
+    }
+    // 原子操作：测试并置位pin对应的bit（返回0=未占用，1=已占用）
+    atomic_t* mask = (atomic_t*)&chip->pin_occupied_mask;
+    if (atomic_test_and_set_bit(mask, pin))
+    {
+        LOG_ERROR("gpio_pin_occupy: pin %u is busy (mask=0x%04lx)", pin,
+                  atomic_get(mask));
+        return -EBUSY;
+    }
+    LOG_DBG("gpio_pin_occupy: pin %u occupied (mask=0x%04lx)", pin,
+            atomic_get(mask));
+    return 0;
+}
+
+/**
+ * @brief 释放引脚（原子位操作）
+ * @param chip GPIO芯片信息
+ * @param pin 引脚偏移量
+ */
+static void gpio_pin_release(const struct gpio_device_info* chip, __u32 pin)
+{
+    if (!chip || pin >= chip->pin_count || pin >= 16)
+    {
+        LOG_ERROR("gpio_pin_release: invalid pin %u (max: %d)", pin,
+                  chip->pin_count);
+        return;
+    }
+    // 原子操作：清空pin对应的bit
+    atomic_t* mask = (atomic_t*)&chip->pin_occupied_mask;
+    atomic_clear_bit(mask, pin);
+    LOG_DBG("gpio_pin_release: pin %u released (mask=0x%04lx)", pin,
+            atomic_get(mask));
+}
+
 static int gpiodev_open(struct fs_file_t* zfp, const char* file_name,
                         fs_mode_t mode)
 {
@@ -365,7 +432,8 @@ static int gpiodev_open(struct fs_file_t* zfp, const char* file_name,
         }
 
         atomic_inc(&client->gpio_union.chip.ref_count);
-        LOG_DBG("GPIOCHIP %s opened, ref_count=%d", client->gpio_union.chip.label,
+        LOG_DBG("GPIOCHIP %s opened, ref_count=%ld",
+                client->gpio_union.chip.label,
                 atomic_get(&client->gpio_union.chip.ref_count));
 
         zfp->filep = client;
@@ -482,72 +550,66 @@ static int gpiodev_close(struct fs_file_t* zfp)
 {
     if (!zfp || !zfp->filep)
     {
-        LOG_ERROR("No valid device to close.\n");
+        LOG_ERROR("No valid device to close");
         return -EINVAL;
     }
 
     struct gpio_dev* client = zfp->filep;
     if (client->type == GPIOCHIP)
     {
-        struct gpio_device_info *chip = &client->gpio_union.chip;
-
+        struct gpio_device_info* chip = &client->gpio_union.chip;
         int ref_count = atomic_dec(&chip->ref_count);
-        LOG_DBG("GPIOCHIP %s closed, ref_count=%d (after dec)",
-                chip->label, ref_count);
+        LOG_DBG("GPIOCHIP %s closed, ref_count=%d", chip->label, ref_count);
         if (ref_count == 0)
         {
-            LOG_DBG("GPIOCHIP %s ref_count=0, release resources", chip->label);            
-            if (zfp->filep) {
-                zfp->filep = NULL;
-                LOG_DBG("GPIOCHIP zfp->filep cleared");
-            }           
-            if (zfp->mp) {
-                zfp->mp = NULL;
-                LOG_DBG("GPIOCHIP Closed gpiofs mount");
-            }
+            LOG_DBG("GPIOCHIP %s ref_count=0, release resources", chip->label);
+            zfp->filep = NULL;
+            zfp->mp = NULL;
             chip->timestamp = 0;
+            atomic_set(&chip->pin_occupied_mask, 0);
         }
     }
     else if (client->type == LINEHANDLE)
     {
-        if (client->gpio_union.linehandle.open_mode == 18)
+        // 释放LINEHANDLE占用的引脚
+        struct linehandle_state* handle_state = &client->gpio_union.linehandle;
+        if (handle_state->gdev && handle_state->open_mode != 18)
         {
-            LOG_DBG("LINEHANDLE zfp->filep is not set NULL!");
+            for (int i = 0; i < handle_state->lines; i++)
+            {
+                gpio_pin_release(handle_state->gdev, handle_state->lineoffsets[i]);
+            }
         }
-        else
+        if (handle_state->open_mode != 18)
         {
             zfp->filep = NULL;
-            client->gpio_union.linehandle.gdev = NULL;
-            LOG_DBG("LINEHANDLE zfp->filep is set NULL!\n ");
+            handle_state->gdev = NULL;
+            memset(handle_state, 0, sizeof(struct linehandle_state));
         }
+        LOG_DBG("LINEHANDLE closed, pins released");
     }
     else if (client->type == LINEEVT)
     {
-        // 仅在非特殊模式下执行释放
-        if (client->gpio_union.lineevent.open_mode == 18)
+        struct lineevent_state* evt_state = &client->gpio_union.lineevent;
+        if (evt_state->gdev && evt_state->open_mode != 18)
         {
-            LOG_DBG(
-                "gpiodev_close: LINEEVT skip release (special open_mode=18)");
+            for (int i = 0; i < evt_state->lines; i++)
+            {
+                gpio_pin_release(evt_state->gdev, evt_state->lineoffset[i]);
+            }
         }
-        else
+        if (evt_state->open_mode != 18)
         {
-            // 通过辅助函数获取索引
             int idx = gpiodev_get_lineevt_idx(zfp);
-
-            // 释放 LINEEVT 实例资源（中断、回调、缓存等）
             if (idx >= 0)
             {
                 lineevent_release_instance(idx);
             }
-            else
-            {
-                LOG_ERROR("LINEEVT instance not found (invalid client)");
-            }
-
-            // 重置关联指针，避免野指针访问
-            client->gpio_union.lineevent.gdev = NULL;
+            evt_state->gdev = NULL;
             zfp->filep = NULL;
+            memset(evt_state, 0, sizeof(struct lineevent_state));
         }
+        LOG_DBG("LINEEVT closed, pin released");
     }
     else
     {
@@ -802,11 +864,36 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
                 }
             }
 
-            int idx = malloc_state(client, linefd_dev);
+            struct gpio_device_info* chip = &client->gpio_union.chip;
+            int occupy_failed_idx = -1;
+            for (int i = 0; i < req->lines; i++)
+            {
+                __u32 pin = req->lineoffsets[i];
+                if (gpio_pin_occupy(chip, pin) != 0)
+                {
+                    occupy_failed_idx = i;
+                    break;
+                }
+            }
+            if (occupy_failed_idx >= 0)
+            {
+                for (int j = 0; j < occupy_failed_idx; j++)
+                {
+                    gpio_pin_release(chip, req->lineoffsets[j]);
+                }
+                return -EBUSY;
+            }
+
+            int idx = malloc_state(client, linefd_dev, LINEHANDLE);
             if (idx < 0)
             {
-                LOG_ERROR("GPIO_GET_LINEINFO_IOCTL [idx < 0]\n");
-                return -EINVAL;
+                LOG_ERROR("GPIO_GET_LINEHANDLE_IOCTL malloc_state failed");
+                // 回滚：释放已占用引脚
+                for (int i = 0; i < req->lines; i++)
+                {
+                    gpio_pin_release(chip, req->lineoffsets[i]);
+                }
+                return -ENOMEM;
             }
 
             char path[64];
@@ -838,11 +925,18 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
             req->fd = zvfs_open(path, O_CREAT, O_RDWR);
             if (req->fd < 0)
             {
-                LOG_ERROR(
-                    "GPIO_GET_LINEINFO_IOCTL Failed to open file: %s, error code: %d\n",
-                    path, req->fd);
+                LOG_ERROR("GPIO_GET_LINEHANDLE_IOCTL open failed, fd=%d",
+                          req->fd);
+                for (int i = 0; i < req->lines; i++)
+                {
+                    gpio_pin_release(chip, req->lineoffsets[i]);
+                }
+                linefd_dev[idx].gpio_union.linehandle.gdev = NULL;
+                memset(&linefd_dev[idx], 0, sizeof(struct gpio_dev));
                 return -1;
             }
+            LOG_DBG("GPIO_GET_LINEHANDLE_IOCTL pin %u occupied, fd=%d",
+                    req->lineoffsets[0], req->fd);
             return 0;
         }
         case GPIOHANDLE_GET_LINE_VALUES_IOCTL:
@@ -1108,8 +1202,19 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
                     req->eventflags);
                 return -EINVAL;
             }
+            __u32 pin_occupy = req->lineoffset;
+            struct gpio_device_info* chip = &client->gpio_union.chip;
 
-            int idx = malloc_state(client, lineevtfd_dev);
+            // 占用引脚（失败直接返回）
+            int ret_occupy = gpio_pin_occupy(chip, pin_occupy);
+            if (ret_occupy != 0)
+            {
+                LOG_ERROR("GPIO_GET_LINEEVENT_IOCTL pin %u occupied failed: %d",
+                          pin_occupy, ret_occupy);
+                return ret_occupy;
+            }
+
+            int idx = malloc_state(client, lineevtfd_dev, LINEEVT);
             if (idx < 0)
             {
                 LOG_ERROR(
@@ -1216,11 +1321,15 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
             return 0;
 
         err_cleanup:
+            gpio_pin_release(chip, pin);
+
             if (device_is_ready(gpio_dev))
             {
                 gpio_remove_callback(gpio_dev, gpio_cb);
             }
-            memset(evt_state, 0, sizeof(struct lineevent_state));
+            evt_state->gdev = NULL;
+            lineevtfd_dev[idx].gpio_union.lineevent.gdev = NULL;
+            memset(evt_state, 0, sizeof(struct lineevent_state));      
             lineevtfd_dev[idx].type = 0;
             return ret;
         }
