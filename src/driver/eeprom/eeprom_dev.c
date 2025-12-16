@@ -105,6 +105,7 @@ static int eepromdev_close(struct fs_file_t *zfp)
         if (!atomic_cas(&client->opened, 1, 0)) {
             LOG_ERROR("EEPROM device was not properly opened");
         }
+	client->offset = 0;
         LOG_DBG("Released EEPROM device lock");
     }
 
