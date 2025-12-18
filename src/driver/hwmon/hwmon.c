@@ -19,6 +19,7 @@
 #include <zephyr/posix/fcntl.h>
 #include <zephyr/drivers/adc.h>
 #include <ls_hal_adcv2.h>
+#include <zephyr/drivers/sensor.h>
 
 LOG_MODULE_REGISTER(hwmon_dev, LOG_LEVEL_ERR);
 
@@ -46,6 +47,81 @@ static struct fs_mount_t hwmonfs_mnt = {
 	.type = FS_HWMON,
 	.fs_data = &hwmon_devices,
 };
+
+// PMBUS设备的默认初始值配置
+static const struct pmbus_default_values pmbus_default_values[] = {
+    // 电流相关属性
+    // {"curr1_input", "6500\n"},        // 6.5A输入电流 (mA)
+    // {"curr1_label", "iout1\n"},       // 输出电流标签
+    // // {"curr1_max", "50000\n"},         // 最大电流50A (mA)
+    // // {"curr1_alarm", "0\n"},           // 电流告警状态
+
+    // 输入电压相关属性 (in1)
+    {"in1_input", "0\n"},         // 12.406V输入电压 (mV)
+    {"in1_label", "vin\n"},           // 输入电压标签
+    // {"in1_max", "17000\n"},           // 最大输入电压17V (mV)
+    // {"in1_rated_max", "17000\n"},     // 额定最大值
+    // {"in1_max_alarm", "0\n"},         // 输入电压最大值告警
+    // {"in1_min", "3312\n"},            // 最小输入电压3.312V (mV)
+    // {"in1_rated_min", "3312\n"},     // 额定最小值
+    // {"in1_min_alarm", "0\n"},         // 输入电压最小值告警
+    // {"in1_beep", "0\n"},              // 输入电压蜂鸣器
+    // {"in1_fault", "0\n"},             // 输入电压故障
+
+    // // 输入电压相关属性 (in2)
+    // {"in2_input", "12375\n"},         // 12.375V输入电压 (mV)
+    // {"in2_label", "vout1\n"},         // 输出电压标签
+    // {"in2_alarm", "0\n"},             // 输出电压告警
+
+    // // 输入电压相关属性 (in3)
+    // {"in3_input", "12406\n"},         // 12.406V输入电压 (mV)
+    // {"in3_label", "vin1\n"},          // 输出电压标签
+    // {"in3_max", "17000\n"},           // 最大输出电压17V (mV)
+    // {"in3_rated_max", "17000\n"},     // 额定最大值
+    // {"in3_max_alarm", "0\n"},         // 输出电压最大值告警
+    // {"in3_min", "3312\n"},            // 最小输出电压3.312V (mV)
+    // {"in3_min_alarm", "0\n"},         // 输出电压最小值告警
+    // {"in3_rated_min", "3312\n"},     // 额定最小值
+    // {"in3_beep", "0\n"},              // 输出电压蜂鸣器
+    // {"in3_fault", "0\n"},             // 输出电压故障
+
+    // 功率相关属性
+    {"power1_input", "0\n"},   // 80W功耗 (uW)
+    {"power1_label", "pin\n"},        // 输入功耗标签
+    // {"power1_alarm", "0\n"},          // 功耗告警状态
+    // {"power1_rated_min", "0\n"},          // 功耗告警状态
+    // {"power1_rated_max", "200000000\n"},          // 功耗告警状态
+
+    // 温度相关属性
+    {"temp1_input", "0\n"},        // 2.5°C温度 (milli-degree Celsius)
+    {"temp1_label", "temp1\n"},       // 温度标签
+    // {"temp1_max", "130000\n"},        // 最大温度130°C (milli-degree Celsius)
+    // {"temp1_max_alarm", "0\n"},       // 温度最大值告警
+    // {"temp1_crit", "213000\n"},       // 临界温度213°C (milli-degree Celsius)
+    // {"temp1_crit_alarm", "0\n"},      // 温度临界值告警
+    // {"temp1_rated_min", "0\n"},      // 温度临界值告警
+    // {"temp1_rated_max", "130000\n"},      // 温度临界值告警
+
+    // 设备名称
+    {"name", "mp5023\n"},            // 设备名称
+};
+
+// 查找属性默认值
+static const char *find_pmbus_default_value(const char *attr_name)
+{
+    for (size_t i = 0; i < ARRAY_SIZE(pmbus_default_values); i++) {
+        if (strcmp(pmbus_default_values[i].attr_name, attr_name) == 0) {
+            return pmbus_default_values[i].default_value;
+        }
+    }
+    return NULL;
+}
+
+// 检查属性是否有效
+static bool is_valid_pmbus_attr(const char *attr_name)
+{
+    return find_pmbus_default_value(attr_name) != NULL;
+}
 
 // poll信号用于支持异步I/O
 static struct k_poll_signal hwmon_poll_signal = K_POLL_SIGNAL_INITIALIZER(hwmon_poll_signal);
@@ -134,7 +210,7 @@ static int hwmondev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t
 	}
 
 	// 分配文件句柄
-	struct hwmon_file_handle *handle = k_malloc(sizeof(struct hwmon_file_handle));
+	struct hwmon_file_handle *handle = k_malloc(sizeof(struct hwmon_file_handle));  //最好使用全局数组实现文件存储
 	if (!handle) {
 		LOG_ERROR("Failed to allocate file handle");
 		return -ENOMEM;
@@ -282,6 +358,8 @@ static ssize_t hwmondev_read_adc(const struct device* adc, unsigned int channel_
 
 static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 {
+	int ret = 0;
+
 	LOG_DBG("Reading from hwmon device");
 
 	if (!zfp || !ptr) {
@@ -354,6 +432,81 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 		break;
 
 	case HWMON_SENSOR:	// TODO:
+		break;
+	case HWMON_PMBUS:
+		if (strlen(attr_name) > 0) {
+			unsigned int channel_index;
+			char attr_type[16];
+
+			// 处理电压输入 (inX_input)
+			if (sscanf(attr_name, "in%u_%15s", &channel_index, attr_type) >= 1) {
+				if (channel_index > 0 && (channel_index-1) < cfg->in_num) {
+					if (strcmp(attr_type, "input") == 0) {
+                        struct sensor_value voltage = {0};
+						ret = sensor_sample_fetch(cfg->in[channel_index-1].dev); /* general sensor api */
+						ret |= sensor_channel_get(cfg->in[channel_index-1].dev, SENSOR_CHAN_VOLTAGE, &voltage);
+						if (ret == 0) {
+							len = snprintf((char *)ptr, size, "%d\n", voltage.val1);
+							zfp->flags |= FS_FLAG_FILE_READ_END;
+							return len;
+						}
+					}
+				}
+			}
+			// 处理电流 (currX_input)
+			// else if (sscanf(attr_name, "curr%u_%15s", &channel_index, attr_type) >= 1) {
+			// 	if (channel_index > 0 && (channel_index-1) < cfg->in_num) {
+			// 		if (strcmp(attr_type, "input") == 0) {
+			// 			ret = sensor_sample_fetch(cfg->in[channel_index-1].dev); /* general sensor api */
+			// 			ret |= sensor_channel_get(cfg->in[channel_index-1].dev, SENSOR_CHAN_CURRENT, &current);
+			// 			if (ret == 0) {
+			// 				len = snprintf((char *)ptr, size, "%d\n", current.val1);
+			// 				zfp->flags |= FS_FLAG_FILE_READ_END;
+			// 				return len;
+			// 			}
+			// 		}
+			// 	}
+			// }
+			// 处理功率 (powerX_input)
+			else if (sscanf(attr_name, "power%u_%15s", &channel_index, attr_type) >= 1) {
+				if (channel_index > 0 && (channel_index-1) < cfg->in_num) {
+					if (strcmp(attr_type, "input") == 0) {
+						struct sensor_value power = {0};
+						ret = sensor_sample_fetch(cfg->in[channel_index-1].dev); /* general sensor api */
+						ret |= sensor_channel_get(cfg->in[channel_index-1].dev, SENSOR_CHAN_POWER, &power);
+						if (ret == 0) {
+							len = snprintf((char *)ptr, size, "%d\n", power.val1);
+							zfp->flags |= FS_FLAG_FILE_READ_END;
+							return len;
+						}
+					}
+				}
+			}
+			// 处理温度 (tempX_input)
+			else if (sscanf(attr_name, "temp%u_%15s", &channel_index, attr_type) >= 1) {
+				if (channel_index > 0 && (channel_index-1) < cfg->in_num) {
+					if (strcmp(attr_type, "input") == 0) {
+						struct sensor_value temp = {0};
+						ret = sensor_sample_fetch(cfg->in[channel_index-1].dev); /* general sensor api */
+						ret |= sensor_channel_get(cfg->in[channel_index-1].dev, SENSOR_CHAN_GAUGE_TEMP, &temp);
+						if (ret == 0) {
+							len = snprintf((char *)ptr, size, "%d\n", temp.val1);
+							zfp->flags |= FS_FLAG_FILE_READ_END;
+							return len;
+						}
+					}
+				}
+			}
+
+			const char *default_val = find_pmbus_default_value(attr_name);
+			if (!default_val) {
+				LOG_ERROR("Default value not found for attribute: %s", attr_name);
+				return -ENOENT; // 返回标准错误码，表示路径不存在
+			}
+			len = snprintf((char *)ptr, size, "%s", default_val);
+			zfp->flags |= FS_FLAG_FILE_READ_END;
+			return len;
+		}
 		break;
 	default:
 		LOG_ERROR("Unsupported device class: %d", cfg->class);
@@ -563,47 +716,53 @@ static int hwmondev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 			return -ENODEV;
 		}
 
-		// 根据设备类型和当前属性索引生成属性信息
-		if (ctx->dev.attr_idx < cfg->in_num) {
-			char attr_name[MAX_ATTR_NAME_LEN];
-
-			switch (cfg->class) {
+		switch (cfg->class) {
 			case HWMON_FAN:	// TODO:
 				break;
 			case HWMON_TEMP:	// TODO:
 				break;
 			case HWMON_ADC:
-				snprintf(attr_name, sizeof(attr_name), "in%u_input", ctx->dev.attr_idx + 1);
+				char attr_name[MAX_ATTR_NAME_LEN];
+				if (ctx->dev.attr_idx < cfg->in_num) {
+					snprintf(attr_name, sizeof(attr_name), "in%u_input", ctx->dev.attr_idx + 1);
+					strncpy(entry->name, attr_name, sizeof(entry->name) - 1);
+					entry->name[sizeof(entry->name) - 1] = '\0';
+					entry->type = FS_DIR_ENTRY_FILE;
+					entry->size = sizeof(int);
+					ctx->dev.attr_idx++;
+					return 0;
+				}
+				else if (ctx->dev.attr_idx == cfg->in_num) {
+					// 添加name属性
+					strncpy(entry->name, "name", sizeof(entry->name) - 1);
+					entry->name[sizeof(entry->name) - 1] = '\0';
+					entry->type = FS_DIR_ENTRY_FILE;
+					entry->size = sizeof(int);
+					ctx->dev.attr_idx++;
+					return 0;
+				}
 				break;
 			case HWMON_SENSOR:	// TODO:
+				break;
+			case HWMON_PMBUS:	// TODO:
+				if (ctx->dev.attr_idx < PMBUS_ATTR_COUNT) {
+					strncpy(entry->name, pmbus_attr_names[ctx->dev.attr_idx], sizeof(entry->name) - 1);
+					entry->name[sizeof(entry->name) - 1] = '\0';
+					entry->type = FS_DIR_ENTRY_FILE;
+					entry->size = sizeof(int);
+					ctx->dev.attr_idx++;
+					return 0;
+				}
 				break;
 			default:
 				LOG_ERROR("Unsupported device class: %d", cfg->class);
 				return -ENOTTY;
-			}
-
-			strncpy(entry->name, attr_name, sizeof(entry->name) - 1);
-			entry->name[sizeof(entry->name) - 1] = '\0';
-			entry->type = FS_DIR_ENTRY_FILE;
-			entry->size = sizeof(int);
-			ctx->dev.attr_idx++;
-			return 0;
-		} else if (ctx->dev.attr_idx == cfg->in_num) {
-			// 添加name属性
-			strncpy(entry->name, "name", sizeof(entry->name) - 1);
-			entry->name[sizeof(entry->name) - 1] = '\0';
-			entry->type = FS_DIR_ENTRY_FILE;
-			entry->size = sizeof(int);
-			ctx->dev.attr_idx++;
-			return 0;
 		}
 		break;
-
 	default:
 		LOG_ERROR("Unknown directory type: %d", ctx->type);
 		return -EINVAL;
 	}
-
 	// 结束遍历
 	memset(entry, 0, sizeof(*entry));
 	return 0;
@@ -639,8 +798,8 @@ static int hwmondev_statvfs(struct fs_mount_t *mountp, const char *path,
 
 	stat->f_bsize = 1;   // 块大小
 	stat->f_frsize = 1;  // 分配单元大小
-	stat->f_blocks = 8192; // 总块数
-	stat->f_bfree = 8192;  // 空闲块数
+	stat->f_blocks = 1; // 总块数
+	stat->f_bfree = 1;  // 空闲块数
 
 	return 0;
 }
@@ -700,6 +859,14 @@ static int hwmondev_stat(struct fs_mount_t *mountp, const char *path,
 						break;
 					}
 					case HWMON_SENSOR: // TODO:
+						break;
+					case HWMON_PMBUS:	// TODO:
+						// 使用辅助函数检查属性是否有效
+						if (is_valid_pmbus_attr(attr_name)) {
+							entry->type = FS_DIR_ENTRY_FILE;
+							entry->size = sizeof(int);
+							return 0;
+						}
 						break;
 				}
 
