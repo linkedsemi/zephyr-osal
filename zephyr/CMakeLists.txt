@@ -10,8 +10,8 @@ if(CONFIG_SOC_LSQSH_CPU2)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/gpio/test.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/kcs/kcs_dev.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/kcs/kcs_test.c
-        ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/led/led_dev.c
-        ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/led/test.c
+        # ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/led/led_dev.c
+        # ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/led/test.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/random/random.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/realpath.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/eeprom/eeprom_dev.c
