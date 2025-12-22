@@ -1441,6 +1441,10 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
         {
             return -EOPNOTSUPP;
         }
+        case F_GETFL:
+            return O_RDWR;
+        case F_SETFL:
+            return 0;
         default:
             LOG_ERROR("Unsupported ioctl request: %lu", request);
             return -ENOTTY;
