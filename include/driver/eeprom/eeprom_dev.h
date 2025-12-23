@@ -14,4 +14,8 @@ struct eeprom_device_info
 	atomic_t opened; // 原子操作
 };
 
+#if defined(CONFIG_BOARD_ALIMOC30) || defined(CONFIG_BOARD_ALIMOC31)
 #define EEPROM_MNT_POINT "/sys/bus/i2c/devices/2-0053"
+#else defined(CONFIG_BOARD_ALISMC)
+#define EEPROM_MNT_POINT "/sys/bus/i2c/devices/14-0050"
+#endif
