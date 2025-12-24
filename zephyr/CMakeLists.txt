@@ -24,7 +24,8 @@ if(CONFIG_SOC_LSQSH_CPU2)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/hwmon/hwmon.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/hwmon/hwmon_ls.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/hwmon/test.c
-
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/ipmb/ipmb_dev.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/ipmb/ipmb_test.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/stub/tcsendbreak.c
     )
 elseif(CONFIG_SOC_LSQSH_CPU1)
