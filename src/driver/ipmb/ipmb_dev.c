@@ -58,6 +58,8 @@ struct ipmb_rx_packet
         .dev_idx = inst,                                                 \
         /* 自旋锁无需显式初始化宏，默认零值即可 */                      \
     },
+
+ 
 struct ipmb_device_info 
 {
     const struct device *ipmb_dev;
@@ -79,6 +81,7 @@ struct ipmb_device_info
     int dev_idx; 
 };
 
+
 static struct ipmb_device_info ipmb_devices[] = 
 {
     DT_INST_FOREACH_STATUS_OKAY(IPMB_DEVICE_PROCESS)
@@ -91,7 +94,6 @@ static struct fs_mount_t ipmbfs_mnt =
     .type = FS_IPMB,
     .fs_data = &ipmb_devices,
 };
-
 
 static void ipmb_queue_init(struct ipmb_device_info *dev)
 {
@@ -151,9 +153,9 @@ static void ipmb_receive_callback(void *param, uint8_t **ptr)
 
     /* * 零拷贝交换 (Pointer Swap) 
      */
-    /* A. 把我们干净的 Buffer 给底层驱动，供其下次接收使用 */
+    /* A. 把干净的 Buffer 给底层驱动，供其下次接收使用 */
     *ptr = packet->data_ptr;
-    /* B. 把底层填满数据的 Buffer 挂到我们的 Packet 上 */
+    /* B. 把底层填满数据的 Buffer 挂到的 Packet 上 */
     packet->data_ptr = filled_buf;
     /* 3. 更新长度并放入数据队列 */
     packet->len = data_len + 1; // +1 包含长度字节本身
@@ -198,20 +200,19 @@ static int ipmbdev_open(struct fs_file_t *zfp, const char *path, fs_mode_t mode)
             atomic_dec(&dev->ref_count);
             return -ENODEV;
         }
-
         /* 初始化队列和信号 */
         ipmb_queue_init(dev);
         k_poll_signal_init(&dev->poll_sig);
-
+   
         ret = ipmb_register(dev->ipmb_dev);
         if (ret < 0) 
         {
             atomic_dec(&dev->ref_count);
             return ret;
         }
+
         /* 1. 从空闲队列中【取出】一个 Packet */
         struct ipmb_rx_packet *init_packet = k_fifo_get(&dev->empty_queue, K_NO_WAIT);
-        
         if (!init_packet) 
         {
             /* 理论上刚 init 完肯定有，除非内存极度匮乏 */
@@ -220,14 +221,12 @@ static int ipmbdev_open(struct fs_file_t *zfp, const char *path, fs_mode_t mode)
             atomic_dec(&dev->ref_count);
             return -ENOMEM;
         }
-
         /* 2. 拿到 Buffer 指针，移交给底层硬件 */
-        /* 注意：这个 init_packet 结构体本身就被“消耗”掉了，
-         * 它代表了当前正在硬件手中的那个 buffer 的“名分”。
-         * 当数据回来时，我们会从队列拿一个新的 packet 来承载数据。
+        /* 这个 init_packet 结构体本身就被“消耗”掉了，
+         * 它代表了当前正在硬件手中的那个 buffer。
+         * 当数据回来时，我们会从队列拿一个新的 packet。
          */
-        uint8_t *initial_buf = init_packet->data_ptr;
-        
+        uint8_t *initial_buf = init_packet->data_ptr; 
         ret = ipmb_set_rx_callback(dev->ipmb_dev, 
                                    ipmb_receive_callback, 
                                    dev,          
@@ -260,11 +259,13 @@ static int ipmbdev_close(struct fs_file_t *zfp)
     }
 
     atomic_val_t old_count = atomic_dec(&dev->ref_count);
+  
     if (old_count == 1) 
     {
         ipmb_unregister(dev->ipmb_dev);
         LOG_INF("IPMB_DEV: IPMB Device %s closed", dev->label);
     }
+
     zfp->filep = NULL;
     return 0;
 }
@@ -326,8 +327,8 @@ static ssize_t ipmbdev_read(struct fs_file_t *zfp, void *buffer, size_t size)
 
     return copy_len;
 }
-#define IPMB_DEV_LOOPBACK_TEST
-#ifndef IPMB_DEV_LOOPBACK_TEST
+
+
 /* =========================================================================
  * Write:直接调用ipmb_write接口
  * ========================================================================= */
@@ -354,7 +355,7 @@ static ssize_t ipmbdev_write(struct fs_file_t *zfp, const void *buffer, size_t s
         return -1;
     }
 }
-#else
+#if 0
 /* =========================================================================
  * Write: 软件模拟回环版本 (Software Loopback)
  * 用于无硬件环境下验证 Buffer 交换、FIFO 队列和 Poll 机制.
@@ -546,30 +547,54 @@ static const struct fs_file_system_t ipmb_fs = {
 
 static int ipmb_dev_init(void)
 {
+    /* 遍历并打印所有 IPMB 设备的信息 (调试用) */
+    for (int i = 0; i < IPMB_NUM; i++) {
+        /* 访问 ipmb_devices 数组，注意成员名称是 ipmb_dev 而不是 dev */
+        if (ipmb_devices[i].ipmb_dev != NULL && ipmb_devices[i].ipmb_dev->name != NULL) {
+            LOG_DBG("ipmb_devices[%d] Hardware Name = %s", i, ipmb_devices[i].ipmb_dev->name);
+        }
+        
+        if (ipmb_devices[i].label != NULL) {
+            LOG_DBG("ipmb_devices[%d] Label (Filename) = %s", i, ipmb_devices[i].label);
+        }
+    }
+
+    /* 确保挂载点设置正确 */
     ipmbfs_mnt.mnt_point = IPMB_MNT_POINT;
+
+    LOG_DBG("Mounting IPMB FS: type=%d, point=%s, data=%p", 
+            ipmbfs_mnt.type, ipmbfs_mnt.mnt_point, ipmbfs_mnt.fs_data);
+
+    /* 执行挂载 */
     int rc = fs_mount(&ipmbfs_mnt);
-    if (rc != 0) 
-    {
-        LOG_ERROR("IPMB_DEV: Error mounting IPMB FS: %d", rc);
+    if (rc != 0) {
+        LOG_ERROR("Error mounting IPMB FS: %d", rc);
+        /* 挂载失败时清空挂载点，防止残留状态 */
+        ipmbfs_mnt.mnt_point = NULL;
         return rc;
     }
-    LOG_INF("IPMB_DEV: IPMB FS mounted successfully");
+
+    LOG_INF("IPMB FS mounted successfully at %s", IPMB_MNT_POINT);
     return 0;
 }
 
 int ipmb_fs_init(void)
 {
     int ret;
-    if (IPMB_NUM == 0) 
-    {
+
+    if (IPMB_NUM == 0) {
+        LOG_WRN("IPMB_DEV: No IPMB devices in Device Tree");
         return 0;
     }
+
     ret = fs_register(FS_IPMB, &ipmb_fs);
-    if (ret < 0) 
-    {
+    if (ret < 0) {
+        LOG_ERROR("IPMB_DEV: Failed to register FS_IPMB: %d", ret);
         return ret;
     }
+
     ipmb_dev_init();
+
     return 0;
 }
 
