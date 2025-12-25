@@ -20,6 +20,7 @@
 #include <zephyr/drivers/adc.h>
 #include <ls_hal_adcv2.h>
 #include <zephyr/drivers/sensor.h>
+#include "driver/hwmon/hwmon_moc_fpga.h"
 
 LOG_MODULE_REGISTER(hwmon_dev, LOG_LEVEL_ERR);
 
@@ -149,6 +150,32 @@ static bool is_valid_adc_attr(const char *attr_name)
         }
     }
     return false;
+static const struct moc_fpga_default_values moc_fpga_default_values[] = {
+    {"temp1_input", "0\n"},
+    {"temp1_label", "Max Temp\n"},
+	{"temp2_input", "0\n"},
+	{"temp2_label", "SDM Temp\n"},
+	{"temp3_input", "0\n"},
+	{"temp3_label", "MAC0 Temp\n"},
+	{"temp4_input", "0\n"},
+	{"temp4_label", "MAC1 Temp\n"},
+	{"version", "0\n"},	
+	{"chip_id", "0\n"},
+};
+
+static const char *find_moc_fpga_default_value(const char *attr_name)
+{
+    for (size_t i = 0; i < ARRAY_SIZE(moc_fpga_default_values); i++) {
+        if (strcmp(moc_fpga_default_values[i].name, attr_name) == 0) {
+            return moc_fpga_default_values[i].default_value;
+        }
+    }
+    return NULL;
+}
+
+static bool is_valid_moc_fpga_attr(const char *attr_name)
+{
+    return find_moc_fpga_default_value(attr_name) != NULL;
 }
 
 // poll信号用于支持异步I/O
@@ -258,6 +285,12 @@ static int hwmondev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t
 	case HWMON_PMBUS:
 		if (!is_valid_pmbus_attr(attr_name)) {
 			LOG_ERROR("pmbus attr '%s' is not found", attr_name);
+			return -EINVAL;
+		}
+		break;
+	case HWMON_MOC_FPGA:
+		if (!is_valid_moc_fpga_attr(attr_name)) {
+			LOG_ERROR("moc_fpga attr '%s' is not found", attr_name);
 			return -EINVAL;
 		}
 		break;
@@ -565,7 +598,98 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 			return len;
 		}
 		break;
-	default:
+
+	case HWMON_MOC_FPGA:
+        if (strlen(attr_name) > 0)
+        {
+            unsigned int channel_index;
+            char attr_type[16];
+            unsigned int type;
+
+            // 处理温度 (tempX_input)
+            if (sscanf(attr_name, "temp%u_%15s", &channel_index, attr_type) >=
+                1)
+            {
+                switch (channel_index)
+                {
+                    case 1:
+                        type = FPGA_TEMP_MAX;
+                        break;
+                    case 2:
+                        type = FPGA_TEMP_SDM;
+                        break;
+                    case 3:
+                        type = FPGA_TEMP_MAC0;
+                        break;
+                    case 4:
+                        type = FPGA_TEMP_MAC1;
+                        break;
+					default:
+						type = FPGA_TEMP_MAX;
+                }
+                if (strcmp(attr_type, "input") == 0)
+                {
+                    char buf[MOC_FPGA_BUF_SIZE];
+                    int ret = moc_fpga_get_temperature(
+                        cfg->in[0].dev, cfg->in[0].channel, type, buf);
+                    if (ret > 0)
+                    {
+                        len = snprintf((char*)ptr, size, "%s", buf);
+                        zfp->flags |= FS_FLAG_FILE_READ_END;
+                        return len;
+                    }
+                    else
+                    {
+                        LOG_ERROR("Failed to get moc-fpga temperature(%d).",
+                                  ret);
+                    }
+                }
+            }
+            else if (strcmp(attr_name, "version") == 0)
+            {
+                char buf[MOC_FPGA_BUF_SIZE];
+                int ret = moc_fpga_get_version(cfg->in[0].dev,
+                                               cfg->in[0].channel, buf);
+                if (ret > 0)
+                {
+                    len = snprintf((char*)ptr, size, "%s", buf);
+                    zfp->flags |= FS_FLAG_FILE_READ_END;
+                    return len;
+                }
+                else
+                {
+                    LOG_ERROR("Failed to get moc-fpga version(%d).", ret);
+                }
+            }
+            else if (strcmp(attr_name, "chip_id") == 0)
+            {
+                char buf[MOC_FPGA_BUF_SIZE];
+                int ret = chip_id_show(cfg->in[0].dev, cfg->in[0].channel, buf);
+                if (ret > 0)
+                {
+                    len = snprintf((char*)ptr, size, "%s", buf);
+                    zfp->flags |= FS_FLAG_FILE_READ_END;
+                    return len;
+                }
+                else
+                {
+                    LOG_ERROR("Failed to get moc-fpga chip id(%d).", ret);
+                }
+            }
+
+            const char* default_val = find_moc_fpga_default_value(attr_name);
+            if (!default_val)
+            {
+                LOG_ERROR("Default value not found for attribute: %s",
+                          attr_name);
+                return -ENOENT; // 返回标准错误码，表示路径不存在
+            }
+            len = snprintf((char*)ptr, size, "%s", default_val);
+            zfp->flags |= FS_FLAG_FILE_READ_END;
+            return len;
+        }
+        break;
+    default:
 		LOG_ERROR("Unsupported device class: %d", cfg->class);
 		return -ENOTTY;
 	}
@@ -811,6 +935,16 @@ static int hwmondev_readdir(struct fs_dir_t *dp, struct fs_dirent *entry)
 					return 0;
 				}
 				break;
+			case HWMON_MOC_FPGA:
+				if (ctx->dev.attr_idx < MOC_FPGA_ATTR_COUNT) {
+					strncpy(entry->name, moc_fpga_attr_names[ctx->dev.attr_idx], sizeof(entry->name) - 1);
+					entry->name[sizeof(entry->name) - 1] = '\0';
+					entry->type = FS_DIR_ENTRY_FILE;
+					entry->size = sizeof(int);
+					ctx->dev.attr_idx++;
+					return 0;
+				}
+				break;
 			default:
 				LOG_ERROR("Unsupported device class: %d", cfg->class);
 				return -ENOTTY;
@@ -920,6 +1054,14 @@ static int hwmondev_stat(struct fs_mount_t *mountp, const char *path,
 					case HWMON_PMBUS:	// TODO:
 						// 使用辅助函数检查属性是否有效
 						if (is_valid_pmbus_attr(attr_name)) {
+							entry->type = FS_DIR_ENTRY_FILE;
+							entry->size = sizeof(int);
+							return 0;
+						}
+						break;
+
+					case HWMON_MOC_FPGA:
+						if (is_valid_moc_fpga_attr(attr_name)) {
 							entry->type = FS_DIR_ENTRY_FILE;
 							entry->size = sizeof(int);
 							return 0;

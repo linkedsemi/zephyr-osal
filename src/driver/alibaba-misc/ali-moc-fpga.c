@@ -7,13 +7,21 @@
  * Copyright (c) 2024, Alibaba Co. Ltd. All rights reserved.
  */
 
-#include <linux/module.h>
-#include <linux/i2c.h>
-#include <linux/delay.h>
-#include <linux/hwmon.h>
-#include <linux/hwmon-sysfs.h>
-#include <linux/err.h>
-#include <linux/mutex.h>
+#include <zephyr/device.h>
+#include <zephyr/drivers/i2c.h>
+#include <zephyr/kernel.h>
+#include <zephyr/logging/log.h>
+#include <zephyr/sys/printk.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "driver/hwmon/hwmon_moc_fpga.h"
+
+LOG_MODULE_REGISTER(moc_fpga, LOG_LEVEL_ERR);
+
+K_MUTEX_DEFINE(moc_fpga_lock);
+
+#define DT_DRV_COMPAT moc_fpga
 
 #define I2C_REG_TEST 0x0
 #define I2C_REG_ENABLE 0x1
@@ -45,251 +53,311 @@
 #define FPGA_REG_CHIP_ID_LSB_REG FPGA_REG(0x00000090)
 #define FPGA_REG_CHIP_ID_MSB_REG FPGA_REG(0x00000091)
 
-/* Each client has this additional data */
-struct moc_fpga_data {
-	struct i2c_client *client;
-	struct mutex mutex_lock;
+
+struct moc_fpga_data
+{
+    const struct device* i2c_dev;
+    struct k_mutex lock;
 };
 
-enum {
-	FPGA_TEMP_SDM,
-	FPGA_TEMP_MAC0,
-	FPGA_TEMP_MAC1,
-	FPGA_TEMP_MAX,
+struct moc_fpga_config
+{
+    const char* name;
+    uint16_t i2c_addr;
 };
 
-static const u32 fpga_temp_regs[] = {
-	FPGA_REG_SDM_TEMP,
-	FPGA_REG_MAC0_TEMP,
-	FPGA_REG_MAC1_TEMP,
-	FPGA_REG_MAX_TEMP,
-};
+
 
 static const char* fpga_temp_labels[] = {
-	"SDM Temp",
-	"MAC0 Temp",
-	"MAC1 Temp",
-	"Max Temp",
-	NULL,
+    "SDM Temp", "MAC0 Temp", "MAC1 Temp", "Max Temp", NULL,
 };
 
-static int moc_fpga_read_data(struct i2c_client *client, u32 reg, u32 *value)
+static int moc_fpga_read_data(const struct device* dev, uint16_t dev_addr, uint32_t reg,
+                              uint32_t* value)
 {
-	u32 reg_tmp = reg;
-	*value = 0;
+    LOG_DBG("Entering moc_fpga_read_data function with dev_addr: 0x%x, reg: 0x%x", dev_addr, reg);
 
-	if (i2c_smbus_write_byte_data(client, I2C_REG_ENABLE, 0x1))
-		return -EIO;
+    int ret;
+    uint32_t reg_tmp = reg;
+    uint8_t buf;
 
-	if (i2c_smbus_write_byte_data(client, I2C_REG_RW, 0x2))
-		return -EIO;
+    *value = 0;
 
-	for (int i = 0; i < 4; i++) {
-		if (i2c_smbus_write_byte_data(client, I2C_REG_ADDR0 + i,
-					      reg_tmp & 0xff))
-			return -EIO;
-		reg_tmp >>= 8;
-	}
+    ret = i2c_reg_write_byte(dev, dev_addr, I2C_REG_ENABLE, 0x1);
+    if (ret)
+    {
+        return ret;
+    }
 
-	for (int i = 0; i < 4; i++) {
-		s32 buf = i2c_smbus_read_byte_data(client, I2C_REG_READY);
+    ret = i2c_reg_write_byte(dev, dev_addr, I2C_REG_RW, 0x2);
+    if (ret)
+    {
+        return ret;
+    }
 
-		if (buf < 0)
-			return -EIO;
+    for (int i = 0; i < 4; i++)
+    {
+        ret = i2c_reg_write_byte(dev, dev_addr, I2C_REG_ADDR0 + i, reg_tmp & 0xff);
+        if (ret)
+        {
+            return ret;
+        }
+        reg_tmp >>= 8;
+    }
 
-		if (buf & 0x1)
-			break;
+    for (int i = 0; i < 4; i++)
+    {
+        ret = i2c_reg_read_byte(dev, dev_addr, I2C_REG_READY, &buf);
+        if (ret)
+        {
+            return ret;
+        }
 
-		if (i == 3) {
-			dev_info(&client->dev, "read reg: 0x%x timeout\n", reg);
-			return -EIO;
-		}
+        if (buf & 0x1)
+            break;
 
-		msleep(10);
-	}
+        if (i == 3)
+        {
+            LOG_WRN("read reg: 0x%x timeout", reg);
+            return -EIO;
+        }
 
-	for (int i = 0; i < 4; i++) {
-		*value <<= 8;
-		s32 buf = i2c_smbus_read_byte_data(client, I2C_REG_RDATA3 - i);
+        k_sleep(K_MSEC(10));
+    }
 
-		if (buf < 0)
-			return -EIO;
+    for (int i = 0; i < 4; i++)
+    {
+        *value <<= 8;
+        ret = i2c_reg_read_byte(dev, dev_addr, I2C_REG_RDATA3 - i, &buf);
+        if (ret)
+        {
+            return ret;
+        }
+        *value |= buf;
+    }
 
-		*value |= buf;
-	}
-
-	return 0;
+    return 0;
 }
 
-static int moc_fpga_write_data(struct i2c_client *client, u32 reg, u32 value)
+static int moc_fpga_write_data(const struct device* dev, uint16_t dev_addr, uint32_t reg,
+                               uint32_t value)
 {
-	if (i2c_smbus_write_byte_data(client, I2C_REG_ENABLE, 0x1))
-		return -EIO;
+    LOG_DBG("Entering moc_fpga_write_data function with dev_addr: 0x%x, reg: 0x%x, value: 0x%x", 
+            dev_addr, reg, value);
 
-	if (i2c_smbus_write_byte_data(client, I2C_REG_RW, 0x1))
-		return -EIO;
+    int ret;
 
-	for (int i = 0; i < 4; i++) {
-		if (i2c_smbus_write_byte_data(client, I2C_REG_ADDR0 + i,
-					      reg & 0xff))
-			return -EIO;
-		reg >>= 8;
-	}
+    ret = i2c_reg_write_byte(dev, dev_addr, I2C_REG_ENABLE, 0x1);
+    if (ret)
+    {
+        return ret;
+    }
 
-	for (int i = 0; i < 4; i++) {
-		if (i2c_smbus_write_byte_data(client, I2C_REG_WDATA0 + i,
-					      value & 0xff))
-			return -EIO;
-		value >>= 8;
-	}
+    ret = i2c_reg_write_byte(dev, dev_addr, I2C_REG_RW, 0x1);
+    if (ret)
+    {
+        return ret;
+    }
 
-	return 0;
+    for (int i = 0; i < 4; i++)
+    {
+        ret = i2c_reg_write_byte(dev, dev_addr, I2C_REG_ADDR0 + i, reg & 0xff);
+        if (ret)
+        {
+            return ret;
+        }
+        reg >>= 8;
+    }
+
+    for (int i = 0; i < 4; i++)
+    {
+        ret = i2c_reg_write_byte(dev, dev_addr, I2C_REG_WDATA0 + i, value & 0xff);
+        if (ret)
+        {
+            return ret;
+        }
+        value >>= 8;
+    }
+
+    return 0;
 }
 
-static int get_mac_temp(struct device *dev, int type, int *temp)
+static int get_mac_temp(const struct device* dev, uint16_t dev_addr, enum fpga_temp_type type,
+                        int* temp)
 {
-	struct moc_fpga_data *data = dev_get_drvdata(dev);
-	struct i2c_client *client = data->client;
-	u32 value = 0;
-	u32 reg_1, reg_2;
+    LOG_DBG("Entering get_mac_temp function with dev_addr: 0x%x, type: %d", dev_addr, type);
 
-	switch (type)
-	{
-	case FPGA_TEMP_MAC0:
-		reg_1 = FPGA_REG_MAC0_REG1;
-		reg_2 = FPGA_REG_MAC0_REG2;
-		break;
-	case FPGA_TEMP_MAC1:
-		reg_1 = FPGA_REG_MAC1_REG1;
-		reg_2 = FPGA_REG_MAC1_REG2;
-		break;
-	default:
-		return -EINVAL;
-	}
+    uint32_t value = 0;
+    uint32_t reg_1, reg_2;
+    int ret;
 
-	mutex_lock(&data->mutex_lock);
+    switch (type)
+    {
+        case FPGA_TEMP_MAC0:
+            reg_1 = FPGA_REG_MAC0_REG1;
+            reg_2 = FPGA_REG_MAC0_REG2;
+            break;
+        case FPGA_TEMP_MAC1:
+            reg_1 = FPGA_REG_MAC1_REG1;
+            reg_2 = FPGA_REG_MAC1_REG2;
+            break;
+        default:
+            return -EINVAL;
+    }
 
-	if (moc_fpga_read_data(client, reg_2, &value)) {
-		mutex_unlock(&data->mutex_lock);
-		return -EIO;
-	}
-	if (value & 0x1) {
-		mutex_unlock(&data->mutex_lock);
-		return -EBUSY;
-	}
+    k_mutex_lock(&moc_fpga_lock, K_FOREVER);
 
-	if (moc_fpga_write_data(client, reg_1, 0x40118)) {
-		mutex_unlock(&data->mutex_lock);
-		return -EIO;
-	}
+    ret = moc_fpga_read_data(dev, dev_addr, reg_2, &value);
+    if (ret)
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return ret;
+    }
 
-	if (moc_fpga_write_data(client, reg_2, 0xF01)) {
-		mutex_unlock(&data->mutex_lock);
-		return -EIO;
-	}
+    if (value & 0x1)
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return -EBUSY;
+    }
 
-	if (moc_fpga_read_data(client, fpga_temp_regs[type], &value)) {
-		mutex_unlock(&data->mutex_lock);
-		return -EIO;
-	}
-	mutex_unlock(&data->mutex_lock);
+    ret = moc_fpga_write_data(dev, dev_addr, reg_1, 0x40118);
+    if (ret)
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return ret;
+    }
 
-	/* bit8 is sign bit */
-	int integer = value & 0x1FF;
-	if (integer & 0x100)
-		*temp = (integer - 0x200) * 1000;
-	else
-		*temp = integer * 1000;
+    ret = moc_fpga_write_data(dev, dev_addr, reg_2, 0xF01);
+    if (ret)
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return ret;
+    }
 
-	return 0;
+    ret = moc_fpga_read_data(dev, dev_addr, fpga_temp_regs[type], &value);
+    if (ret)
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return ret;
+    }
+
+    k_mutex_unlock(&moc_fpga_lock);
+
+    /* bit8 is sign bit */
+    int integer = value & 0x1FF;
+    if (integer & 0x100)
+        *temp = (integer - 0x200) * 1000;
+    else
+        *temp = integer * 1000;
+
+    return 0;
 }
 
-static int get_sdm_temp(struct device *dev, int type, int* temp)
+static int get_sdm_temp(const struct device* dev, uint16_t dev_addr, enum fpga_temp_type type,
+                        int* temp)
 {
-	struct moc_fpga_data *data = dev_get_drvdata(dev);
-	struct i2c_client *client = data->client;
+    LOG_DBG("Entering get_sdm_temp function with dev_addr: 0x%x, type: %d", dev_addr, type);
 
-	u32 value = 0;
+    uint32_t value = 0;
+    int ret;
 
-	mutex_lock(&data->mutex_lock);
-	if (moc_fpga_read_data(client, fpga_temp_regs[type], &value)) {
-		mutex_unlock(&data->mutex_lock);
-		return -EIO;
-	}
-	mutex_unlock(&data->mutex_lock);
+    k_mutex_lock(&moc_fpga_lock, K_FOREVER);
+    ret = moc_fpga_read_data(dev, dev_addr, fpga_temp_regs[type], &value);
+    if (ret)
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return ret;
+    }
+    k_mutex_unlock(&moc_fpga_lock);
 
-	int integer = ((value & 0xff00) >> 8) * 1000;
-	int decimal = (value & 0xff) > 99 ? 0 : (value & 0xff) * 10;
+    int integer = ((value & 0xff00) >> 8) * 1000;
+    int decimal = (value & 0xff) > 99 ? 0 : (value & 0xff) * 10;
 
-	*temp = integer + decimal;
+    *temp = integer + decimal;
 
-	return 0;
+    return 0;
 }
 
-static int get_temp(struct device *dev, int type, int* temp)
+static int get_temp(const struct device* dev, uint16_t dev_addr, enum fpga_temp_type type,
+                    int* temp)
 {
-	switch (type)
-	{
-	case FPGA_TEMP_SDM:
-		return get_sdm_temp(dev, FPGA_TEMP_SDM, temp);
-	case FPGA_TEMP_MAC0:
-	case FPGA_TEMP_MAC1:
-		return get_mac_temp(dev, type, temp);
-	}
-	return -EINVAL;
+    LOG_DBG("Entering get_temp function with dev_addr: 0x%x, type: %d", dev_addr, type);
+
+    switch (type)
+    {
+        case FPGA_TEMP_SDM:
+            return get_sdm_temp(dev, dev_addr, FPGA_TEMP_SDM, temp);
+        case FPGA_TEMP_MAC0:
+        case FPGA_TEMP_MAC1:
+            return get_mac_temp(dev, dev_addr, type, temp);
+    }
+    return -EINVAL;
+}
+ssize_t moc_fpga_get_temperature(const struct device* dev, uint16_t dev_addr,
+                                        enum fpga_temp_type type, char* buf)
+{
+    LOG_DBG("Entering moc_fpga_get_temperature function with dev_addr: 0x%x, type: %d", dev_addr, type);
+
+    int temp = -256;
+
+    if (type > FPGA_TEMP_MAX)
+    {
+        return -EINVAL;
+    }
+
+    if (type == FPGA_TEMP_MAX)
+    {
+        bool got_temp = false;
+        int tmp = -256;
+        for (int i = 0; i < FPGA_TEMP_MAX; i++)
+        {
+            if (get_temp(dev, dev_addr, i, &tmp))
+                continue;
+
+            got_temp = true;
+            if (tmp > temp)
+            {
+                temp = tmp;
+            }
+        }
+        if (!got_temp)
+            return -EIO;
+    }
+    else
+    {
+        if (get_temp(dev, dev_addr, type, &temp))
+            return -EIO;
+    }
+
+    return snprintf(buf, MOC_FPGA_BUF_SIZE, "%d\n", temp);
 }
 
-static ssize_t temp_show(struct device *dev, struct device_attribute *da,
-			 char *buf)
+static ssize_t moc_fpga_get_temp_label(enum fpga_temp_type type, char* buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
+    LOG_DBG("Entering moc_fpga_get_temp_label function with type: %d", type);
 
-	int temp = -256;
-
-	if (attr->index == FPGA_TEMP_MAX) {
-		bool got_temp = false;
-		int tmp = -256;
-		for (int i = 0; i < FPGA_TEMP_MAX; i++) {
-			if (get_temp(dev, i, &tmp))
-				continue;
-
-			got_temp = true;
-			if (tmp > temp) {
-				temp = tmp;
-			}
-		}
-		if (!got_temp)
-			return -EIO;
-	}
-	else {
-		if (get_temp(dev, attr->index, &temp))
-			return -EIO;
-	}
-
-	return sprintf(buf, "%d\n", temp);
+    if (type > FPGA_TEMP_MAX)
+    {
+        return -1;
+    }
+    return snprintf(buf, MOC_FPGA_BUF_SIZE, "%s\n", fpga_temp_labels[type]);
 }
 
-static ssize_t temp_label_show(struct device *dev, struct device_attribute *da,
-			       char *buf)
+ssize_t moc_fpga_get_version(const struct device* dev, uint16_t dev_addr, char* buf)
 {
-	struct sensor_device_attribute *attr = to_sensor_dev_attr(da);
-	return sprintf(buf, "%s\n", fpga_temp_labels[attr->index]);
-}
+    LOG_DBG("Entering moc_fpga_get_version function with dev_addr: 0x%x", dev_addr);
 
-static ssize_t version_show(struct device *dev, struct device_attribute *da,
-			    char *buf)
-{
-	struct moc_fpga_data *data = dev_get_drvdata(dev);
-	struct i2c_client *client = data->client;
+    uint32_t value = 0;
+    int ret;
 
-	u32 value = 0;
-
-	mutex_lock(&data->mutex_lock);
-	if (moc_fpga_read_data(client, FPGA_REG_VERSION, &value)) {
-		mutex_unlock(&data->mutex_lock);
-		return -EIO;
-	}
-	mutex_unlock(&data->mutex_lock);
+    k_mutex_lock(&moc_fpga_lock, K_FOREVER);
+    ret = moc_fpga_read_data(dev, dev_addr, FPGA_REG_VERSION, &value);
+    if (ret)
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return ret;
+    }
+    k_mutex_unlock(&moc_fpga_lock);
 
 	int patch = value & 0xff;
 	value >>= 8;
@@ -297,95 +365,28 @@ static ssize_t version_show(struct device *dev, struct device_attribute *da,
 	value >>= 8;
 	int major = value & 0xff;
 
-	return sprintf(buf, "%d.%d.%d\n", major, minor, patch);
+    return snprintf(buf, MOC_FPGA_BUF_SIZE, "%d.%d.%d\n", major, minor, patch);
 }
 
-static ssize_t chip_id_show(struct device *dev, struct device_attribute *da,
-			    char *buf)
+ssize_t chip_id_show(struct device* dev, uint16_t dev_addr, char* buf)
 {
-	struct moc_fpga_data *data = dev_get_drvdata(dev);
-	struct i2c_client *client = data->client;
+    LOG_DBG("Entering chip_id_show function with dev_addr: 0x%x", dev_addr);
 
-	u32 lsb = 0;
-	u32 msb = 0;
+    u32 lsb = 0;
+    u32 msb = 0;
 
-	mutex_lock(&data->mutex_lock);
-	if (moc_fpga_read_data(client, FPGA_REG_CHIP_ID_LSB_REG, &lsb)) {
-		mutex_unlock(&data->mutex_lock);
-		return -EIO;
-	}
-	if (moc_fpga_read_data(client, FPGA_REG_CHIP_ID_MSB_REG, &msb)) {
-		mutex_unlock(&data->mutex_lock);
-		return -EIO;
-	}
-	mutex_unlock(&data->mutex_lock);
+    k_mutex_lock(&moc_fpga_lock, K_FOREVER);
+    if (moc_fpga_read_data(dev, dev_addr, FPGA_REG_CHIP_ID_LSB_REG, &lsb))
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return -EIO;
+    }
+    if (moc_fpga_read_data(dev, dev_addr, FPGA_REG_CHIP_ID_MSB_REG, &msb))
+    {
+        k_mutex_unlock(&moc_fpga_lock);
+        return -EIO;
+    }
+    k_mutex_unlock(&moc_fpga_lock);
 
-	return sprintf(buf, "0x%08X%08X\n", msb, lsb);
+    return snprintf(buf, MOC_FPGA_BUF_SIZE, "0x%08X%08X\n", msb, lsb);
 }
-
-static SENSOR_DEVICE_ATTR_RO(temp1_input, temp, FPGA_TEMP_MAX);
-static SENSOR_DEVICE_ATTR_RO(temp2_input, temp, FPGA_TEMP_SDM);
-static SENSOR_DEVICE_ATTR_RO(temp3_input, temp, FPGA_TEMP_MAC0);
-static SENSOR_DEVICE_ATTR_RO(temp4_input, temp, FPGA_TEMP_MAC1);
-static SENSOR_DEVICE_ATTR_RO(temp1_label, temp_label, FPGA_TEMP_MAX);
-static SENSOR_DEVICE_ATTR_RO(temp2_label, temp_label, FPGA_TEMP_SDM);
-static SENSOR_DEVICE_ATTR_RO(temp3_label, temp_label, FPGA_TEMP_MAC0);
-static SENSOR_DEVICE_ATTR_RO(temp4_label, temp_label, FPGA_TEMP_MAC1);
-
-static SENSOR_DEVICE_ATTR_RO(version, version, 0);
-
-static SENSOR_DEVICE_ATTR_RO(chip_id, chip_id, 0);
-
-static struct attribute *moc_fpga_attrs[] = {
-	&sensor_dev_attr_temp1_input.dev_attr.attr,
-	&sensor_dev_attr_temp2_input.dev_attr.attr,
-	&sensor_dev_attr_temp3_input.dev_attr.attr,
-	&sensor_dev_attr_temp4_input.dev_attr.attr,
-	&sensor_dev_attr_temp1_label.dev_attr.attr,
-	&sensor_dev_attr_temp2_label.dev_attr.attr,
-	&sensor_dev_attr_temp3_label.dev_attr.attr,
-	&sensor_dev_attr_temp4_label.dev_attr.attr,
-	&sensor_dev_attr_version.dev_attr.attr,
-	&sensor_dev_attr_chip_id.dev_attr.attr,
-	NULL
-};
-
-ATTRIBUTE_GROUPS(moc_fpga);
-
-static int moc_fpga_probe(struct i2c_client *client)
-{
-	struct device *dev = &client->dev;
-	struct device *hwmon_dev;
-	struct moc_fpga_data *data;
-
-	data = devm_kzalloc(dev, sizeof(struct moc_fpga_data), GFP_KERNEL);
-	if (!data)
-		return -ENOMEM;
-
-	data->client = client;
-	mutex_init(&data->mutex_lock);
-
-	hwmon_dev = devm_hwmon_device_register_with_groups(
-		dev, client->name, data, moc_fpga_groups);
-	return PTR_ERR_OR_ZERO(hwmon_dev);
-}
-
-static const struct i2c_device_id moc_fpga_id[] = { { "moc_fpga", 0 }, {} };
-
-MODULE_DEVICE_TABLE(i2c, moc_fpga_id);
-
-/* This is the driver that will be inserted */
-static struct i2c_driver moc_fpga_driver = {
-	.class = I2C_CLASS_HWMON,
-	.driver = {
-		   .name = "moc_fpga",
-	},
-	.probe_new = moc_fpga_probe,
-	.id_table = moc_fpga_id,
-};
-
-module_i2c_driver(moc_fpga_driver);
-
-MODULE_AUTHOR("Tianhui Xu <tianhui.xth@alibaba-inc.com>");
-MODULE_DESCRIPTION("Alibaba MOC FPGA Driver");
-MODULE_LICENSE("GPL");
