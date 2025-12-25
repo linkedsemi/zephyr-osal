@@ -106,6 +106,23 @@ static const struct pmbus_default_values pmbus_default_values[] = {
     {"name", "mp5023\n"},            // 设备名称
 };
 
+static const char *adc_file[] = {
+	"in1_input",
+	"in2_input",
+	"in3_input",
+	"in4_input",
+	"in5_input",
+	"in6_input",
+	"in7_input",
+	"in8_input",
+	"in9_input",
+	"in10_input",
+	"in11_input",
+	"in12_input",
+	"in13_input",
+	"name"
+};
+
 // 查找属性默认值
 static const char *find_pmbus_default_value(const char *attr_name)
 {
@@ -121,6 +138,17 @@ static const char *find_pmbus_default_value(const char *attr_name)
 static bool is_valid_pmbus_attr(const char *attr_name)
 {
     return find_pmbus_default_value(attr_name) != NULL;
+}
+
+// 检查属性是否为有效的ADC属性
+static bool is_valid_adc_attr(const char *attr_name)
+{
+    for (size_t i = 0; i < ARRAY_SIZE(adc_file); i++) {
+        if (strcmp(adc_file[i], attr_name) == 0) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // poll信号用于支持异步I/O
@@ -207,6 +235,35 @@ static int hwmondev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t
 	if (!client) {
 		LOG_ERROR("HWMON device '%s' not found", device_name);
 		return -ENODEV;
+	}
+
+
+	const struct hwmon_ls_config *cfg = hwmon_ls_get_config(client->dev);
+	if (!cfg) {
+		LOG_ERROR("Failed to get hwmon configuration");
+		return -ENODEV;
+	}
+
+	switch (cfg->class) {
+	case HWMON_ADC:
+		if (!is_valid_adc_attr(attr_name)) {
+			LOG_ERROR("adc attr '%s' is not found", attr_name);
+			return -EINVAL;
+		}
+		break;
+	case HWMON_FAN:
+	case HWMON_TEMP:
+	case HWMON_SENSOR:
+		break;
+	case HWMON_PMBUS:
+		if (!is_valid_pmbus_attr(attr_name)) {
+			LOG_ERROR("pmbus attr '%s' is not found", attr_name);
+			return -EINVAL;
+		}
+		break;
+	default:
+		LOG_ERROR("Unsupported hwmon class: %d", cfg->class);
+		return -EINVAL;
 	}
 
 	// 分配文件句柄
