@@ -150,6 +150,8 @@ static bool is_valid_adc_attr(const char *attr_name)
         }
     }
     return false;
+}
+
 static const struct moc_fpga_default_values moc_fpga_default_values[] = {
     {"temp1_input", "0\n"},
     {"temp1_label", "Max Temp\n"},
