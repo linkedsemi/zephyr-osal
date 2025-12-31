@@ -7,6 +7,8 @@
 #include <linux/i2c.h>
 #include <linux/types.h>
 
+#pragma once
+
 #define HWMON_MNT_POINT "/sys/class/hwmon"
 
 enum hwmon_class
@@ -16,6 +18,7 @@ enum hwmon_class
 	HWMON_ADC,
 	HWMON_SENSOR,
     HWMON_PMBUS,
+    HWMON_MOC_FPGA,
 };
 
 struct hwmon_ref {
