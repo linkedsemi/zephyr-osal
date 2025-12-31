@@ -24,10 +24,10 @@
 
 LOG_MODULE_REGISTER(ipmb_dev, LOG_LEVEL_INF);
 
-#define DT_DRV_COMPAT linkedsemi_ls_ipmb_dev
+#define DT_DRV_COMPAT linkedsemi_ls_ipmb_target
 
 #define IPMB_NUM DT_NUM_INST_STATUS_OKAY(DT_DRV_COMPAT)
-#define MAX_IPMB_DEVICES 14
+#define MAX_IPMB_DEVICES 1
 
 BUILD_ASSERT(IPMB_NUM <= MAX_IPMB_DEVICES, "Exceeded maximum IPMB device count");
 
@@ -315,14 +315,14 @@ static ssize_t ipmbdev_read(struct fs_file_t *zfp, void *buffer, size_t size)
         dev->current_read_packet = NULL;
         dev->current_read_offset = 0;
         
-        if (!k_fifo_is_empty(&dev->data_queue)) 
-        {
-             k_poll_signal_raise(&dev->poll_sig, 1);
-        } 
-        else 
-        {
-             k_poll_signal_reset(&dev->poll_sig);
-        }
+        // if (!k_fifo_is_empty(&dev->data_queue)) 
+        // {
+        //      k_poll_signal_raise(&dev->poll_sig, 1);
+        // } 
+        // else 
+        // {
+        //      k_poll_signal_reset(&dev->poll_sig);
+        // }
     }
 
     return copy_len;
@@ -401,6 +401,8 @@ static int ipmb_poll_prepare_ctx(struct ipmb_device_info *dev,
         (*pev)->mode = K_POLL_MODE_NOTIFY_ONLY;
         (*pev)->state = K_POLL_STATE_NOT_READY;
         (*pev)++;
+
+        k_poll_signal_reset(&dev->poll_sig);
     }
     return 0;
 }
@@ -409,15 +411,10 @@ static int ipmb_poll_update_ctx(struct ipmb_device_info *dev,
                                 struct zvfs_pollfd *pfd,
                                 struct k_poll_event **pev)
 {
-    bool data_available = !k_fifo_is_empty(&dev->data_queue) || (dev->current_read_packet != NULL);
+    bool has_data = !k_fifo_is_empty(&dev->data_queue);
     
-    if ((pfd->events & ZVFS_POLLIN) && 
-        (((*pev)->signal->result == 1) ||
-         data_available)) 
-    {
+    if ((pfd->events & ZVFS_POLLIN) && has_data) {
         pfd->revents |= ZVFS_POLLIN;
-        (*pev)->state = K_POLL_STATE_NOT_READY;
-        (*pev)++;
     }
     return 0;
 }
@@ -443,6 +440,8 @@ static int ipmbdev_ioctl(struct fs_file_t *zfp, unsigned long cmd, va_list args)
             struct k_poll_event **pev = va_arg(args, struct k_poll_event **);
             return ipmb_poll_update_ctx(dev, pfd, pev);
         }
+        case ZFD_IOCTL_SET_LOCK:
+		    return 0;
         default: 
             return -ENOTTY;
     }
@@ -598,4 +597,4 @@ int ipmb_fs_init(void)
     return 0;
 }
 
-SYS_INIT(ipmb_fs_init, POST_KERNEL, 99);
+SYS_INIT(ipmb_fs_init, POST_KERNEL, CONFIG_FILE_SYSTEM_INIT_PRIORITY);
