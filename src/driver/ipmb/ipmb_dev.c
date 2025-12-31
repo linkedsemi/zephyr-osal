@@ -44,6 +44,7 @@ struct ipmb_rx_packet
     void *fifo_reserved;    /* Zephyr k_fifo 需要的保留字段 */
     uint8_t *data_ptr;      /* 指向 ipmb_raw_buffers 中的某一块 */
     uint16_t len;           /* 当前包的有效数据长度 */
+    uint32_t packet_id;     /* debug */
 };
 
 /* -------------------- 设备定义 -------------------- */
@@ -95,6 +96,9 @@ static struct fs_mount_t ipmbfs_mnt =
     .fs_data = &ipmb_devices,
 };
 
+/* global Packet ID counter */
+static uint32_t global_packet_id = 0;
+
 static void ipmb_queue_init(struct ipmb_device_info *dev)
 {
     k_fifo_init(&dev->empty_queue);
@@ -108,6 +112,7 @@ static void ipmb_queue_init(struct ipmb_device_info *dev)
     for (int i = 0; i < RX_BUF_COUNT; i++) {
         /* 指向该设备对应的第 i 块内存 */
         dev->packet_pool[i].data_ptr = ipmb_raw_buffers[dev->dev_idx][i];
+        dev->packet_pool[i].packet_id = global_packet_id++;  /* Assign a unique ID */
         
         /* 放入空闲队列 */
         k_fifo_put(&dev->empty_queue, &dev->packet_pool[i]);
@@ -119,6 +124,14 @@ static void ipmb_queue_init(struct ipmb_device_info *dev)
  * ========================================================================= */
 static void ipmb_receive_callback(void *param, uint8_t **ptr)
 {
+    /* disable reentry for debug*/
+    static bool in_callback = false;
+    if (in_callback) {
+        LOG_WRN("RX_CB: Reentrant call detected!");
+        return;
+    }
+    in_callback = true;
+
     struct ipmb_device_info *dev = (struct ipmb_device_info *)param;
     struct ipmb_rx_packet *packet;
     uint8_t *filled_buf = *ptr; /* 获取底层驱动当前的 buffer 地址 */
@@ -126,16 +139,20 @@ static void ipmb_receive_callback(void *param, uint8_t **ptr)
 
     if (!dev || !filled_buf) 
     {
+        in_callback = false;
         return;
     }
 
     /* 1. 解析长度 (假设第一个字节是长度) */
     data_len = filled_buf[0]; 
 
+    LOG_DBG("RX_CB: filled_buf=%p, data_len=%d", filled_buf, data_len);
+
     if (data_len == 0 || data_len > RX_BUF_SIZE) 
     {
         /* 数据异常，不交换，让底层继续用这个 buffer */
         LOG_ERROR("IPMB_DEV: IPMB RX Drop: data_len abnormal (%d)", data_len);
+        in_callback = false;
         return;
     }
 
@@ -148,8 +165,12 @@ static void ipmb_receive_callback(void *param, uint8_t **ptr)
          * 不做任何操作，底层会复用 filled_buf，旧数据会被覆盖
          */
         LOG_ERROR("IPMB_DEV: IPMB RX Drop: No buffers");
+        in_callback = false;
         return; 
     }
+
+    LOG_DBG("RX_CB: Swapping buf %p -> %p (pkt_id=%u)", 
+            filled_buf, packet->data_ptr, packet->packet_id);
 
     /* * 零拷贝交换 (Pointer Swap) 
      */
@@ -162,6 +183,10 @@ static void ipmb_receive_callback(void *param, uint8_t **ptr)
     k_fifo_put(&dev->data_queue, packet);
     /* 4. 唤醒上层 */
     k_poll_signal_raise(&dev->poll_sig, 1);
+    
+    LOG_DBG("RX_CB: Packet queued (id=%u, len=%u)", packet->packet_id, packet->len);
+
+    in_callback = false;
 }
 
 static const char *get_filename(const char *path)
@@ -288,6 +313,13 @@ static ssize_t ipmbdev_read(struct fs_file_t *zfp, void *buffer, size_t size)
     {
         dev->current_read_packet = k_fifo_get(&dev->data_queue, K_NO_WAIT);
         dev->current_read_offset = 0;
+        
+        if (dev->current_read_packet) {
+            LOG_DBG("READ: Got new packet (id=%u, len=%u, queue_empty=%d)", 
+                    dev->current_read_packet->packet_id,
+                    dev->current_read_packet->len,
+                    k_fifo_is_empty(&dev->data_queue));
+        }
     }
 
     if (dev->current_read_packet == NULL) 
@@ -305,10 +337,16 @@ static ssize_t ipmbdev_read(struct fs_file_t *zfp, void *buffer, size_t size)
      */
     memcpy(buffer, pkt->data_ptr + dev->current_read_offset, copy_len);
     
+    LOG_DBG("READ: Copied %zu bytes (offset=%zu/%u, pkt_id=%u)", 
+            copy_len, dev->current_read_offset, pkt->len, pkt->packet_id);
+    if (copy_len > 0) {
+        LOG_HEXDUMP_DBG(buffer, copy_len, "ME RX Data:");
+    }
     dev->current_read_offset += copy_len;
 
     if (dev->current_read_offset >= pkt->len) 
     {
+        LOG_DBG("READ: Completed packet (id=%u), returning to empty_queue", pkt->packet_id);
         /* 放回空闲队列（归还 packet 结构体及其携带的 buffer） */
         k_fifo_put(&dev->empty_queue, pkt);
         
@@ -341,6 +379,9 @@ static ssize_t ipmbdev_write(struct fs_file_t *zfp, const void *buffer, size_t s
     {
         return -EINVAL;
     }
+
+    LOG_DBG("IPMB_DEV: Writing %zu bytes to IPMB:", size);
+    LOG_HEXDUMP_DBG(buffer, size, "TX Data");
 
     ret = ipmb_write(dev->ipmb_dev, (uint8_t *)buffer, size);
 
@@ -416,12 +457,14 @@ static int ipmb_poll_update_ctx(struct ipmb_device_info *dev,
     if ((pfd->events & ZVFS_POLLIN) && has_data) {
         pfd->revents |= ZVFS_POLLIN;
     }
+    LOG_DBG("POLL_UPDATE: data_queue_empty=%d", !has_data);
     return 0;
 }
 
 static int ipmbdev_ioctl(struct fs_file_t *zfp, unsigned long cmd, va_list args)
 {
     struct ipmb_device_info *dev = zfp->filep;
+	// LOG_DBG("ipmbdev ioctl: 0x%lx", cmd);
 
     switch (cmd)
      {
