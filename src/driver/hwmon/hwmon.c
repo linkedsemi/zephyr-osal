@@ -21,6 +21,7 @@
 #include <ls_hal_adcv2.h>
 #include <zephyr/drivers/sensor.h>
 #include "driver/hwmon/hwmon_moc_fpga.h"
+#include "driver/hwmon/hwmon_pmbus.h"
 
 LOG_MODULE_REGISTER(hwmon_dev, LOG_LEVEL_ERR);
 
@@ -49,6 +50,7 @@ static struct fs_mount_t hwmonfs_mnt = {
 	.fs_data = &hwmon_devices,
 };
 
+#if defined(CONFIG_BOARD_ALIMOC30) || defined(CONFIG_BOARD_ALIMOC31)
 // PMBUS设备的默认初始值配置
 static const struct pmbus_default_values pmbus_default_values[] = {
     // 电流相关属性
@@ -106,6 +108,88 @@ static const struct pmbus_default_values pmbus_default_values[] = {
     // 设备名称
     {"name", "mp5023\n"},            // 设备名称
 };
+#elif defined(CONFIG_BOARD_ALISMC)
+static const struct pmbus_default_values pmbus_default_values[] = {
+    // 电源控制相关属性
+    {"ac_cycle", "0\n"},                           // 电源AC周期控制
+    {"auto_turn_on_delay", "0\n"},                 // 自动开机延时
+
+    // 风扇控制相关属性
+    {"fan_config_1_2", "0\n"},                     // 风扇配置
+    {"fan_command_1", "0\n"},                      // 风扇命令1
+    {"fan_command_2", "0\n"},                      // 风扇命令2
+
+    // 历史状态相关属性
+    {"his_status_word", "0\n"},                    // 历史状态字
+    {"his_status_vout", "0\n"},                    // 历史输出电压状态
+    {"his_status_iout", "0\n"},                    // 历史输出电流状态
+    {"his_status_input", "0\n"},                   // 历史输入状态
+    {"his_status_temp", "0\n"},                    // 历史温度状态
+    {"his_status_cml", "0\n"},                     // 历史通信/控制状态
+    {"his_status_mfr_spec", "0\n"},                // 历史厂商特定状态
+    {"his_status_fans12", "0\n"},                  // 历史风扇状态
+
+    // 历史读取相关属性
+    {"his_read_vin", "0\n"},                       // 历史输入电压读数
+    {"his_read_iin", "0\n"},                       // 历史输入电流读数
+    {"his_read_vcap", "0\n"},                      // 历史电容电压读数
+    {"his_read_vout", "0\n"},                      // 历史输出电压读数
+    {"his_read_vin1", "0\n"},                      // 历史输入电压1读数
+    {"his_read_iout", "0\n"},                      // 历史输出电流读数
+    {"his_read_temp1", "0\n"},                     // 历史温度1读数
+    {"his_read_temp2", "0\n"},                     // 历史温度2读数
+    {"his_read_temp3", "0\n"},                     // 历史温度3读数
+    {"his_read_fan_speed1", "0\n"},                // 历史风扇速度1读数
+    {"his_read_pout", "0\n"},                      // 历史输出功率读数
+    {"his_read_pin", "0\n"},                       // 历史输入功率读数
+    {"his_mfr_pos_total", "0\n"},                  // 历史厂商位置总数
+    {"his_mfr_pos_last", "0\n"},                   // 历史厂商最后位置
+
+    // 事件索引和读取相关属性
+    {"delta_event_index", "0\n"},                  // Delta事件索引
+    {"his_delta_read_event", "0\n"},               // Delta历史事件读取
+    {"acep_event_index", "0\n"},                   // ACEP事件索引
+    {"his_acep_read_event", "0\n"},                // ACEP历史事件读取
+
+    // 制造商信息相关属性
+    {"mfr_id", "AliPSU\n"},                        // 制造商ID
+    {"mfr_model", "ALI-PSU\n"},                    // 制造商型号
+    {"mfr_location", "China\n"},                   // 制造商位置
+    {"mfr_date", "20240101\n"},                    // 制造日期
+    {"mfr_sn", "ALI00000000\n"},                   // 制造商序列号
+    {"mfr_psu_defined", "0\n"},                    // 制造商定义字段
+
+    // 版本和状态相关属性
+    {"hw_version", "1.0\n"},                       // 硬件版本
+    {"fw_version", "1.0\n"},                       // 固件版本
+    {"status0_other", "0\n"},                      // 其他状态
+    {"line_status", "0\n"},                        // 线路状态
+    {"match_status", "0\n"},                       // 匹配状态
+    {"status0_input_b", "0\n"},                    // 输入B状态
+    {"input_channel_status", "0\n"},               // 输入通道状态
+    {"power_supply_mode", "0\n"},                  // 电源模式
+
+    // 页和引导加载程序相关属性
+    {"mfr_page", "0\n"},                           // 制造商页
+    {"mfr_pos_total", "0\n"},                      // 制造商位置总数
+    {"mfr_pos_last", "0\n"},                       // 制造商最后位置
+    {"bootloader_key", "0\n"},                     // 引导加载程序密钥
+    {"bootloader_product_key", "0\n"},             // 引导加载程序产品密钥
+    {"bootloader_status", "0\n"},                  // 引导加载程序状态
+    {"bootloader_memory16", "0\n"},                // 引导加载程序内存16
+    {"bootloader_memory32", "0\n"},                // 引导加载程序内存32
+
+    // 电流共享相关属性
+    {"curr_share_adjust_en", "0\n"},               // 电流共享调整使能
+    {"curr_share_adjust", "0\n"},                  // 电流共享调整
+    {"curr_share_compensation_read", "0\n"},       // 电流共享补偿读取
+    {"curr_share_compensation_write", "0\n"},      // 电流共享补偿写入
+    {"curr_iout_filter", "0\n"},                   // 输出电流滤波
+
+    // 设备名称
+    {"name", "alipsu\n"},                          // 设备名称
+};
+#endif
 
 static const char *adc_file[] = {
 	"in1_input",
@@ -161,7 +245,7 @@ static const struct moc_fpga_default_values moc_fpga_default_values[] = {
 	{"temp3_label", "MAC0 Temp\n"},
 	{"temp4_input", "0\n"},
 	{"temp4_label", "MAC1 Temp\n"},
-	{"version", "0\n"},	
+	{"version", "0\n"},
 	{"chip_id", "0\n"},
 };
 
@@ -527,6 +611,16 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 		break;
 	case HWMON_PMBUS:
 		if (strlen(attr_name) > 0) {
+#if defined(CONFIG_BOARD_ALISMC)
+			const char *default_val = find_pmbus_default_value(attr_name);
+			if (!default_val) {
+				LOG_ERROR("Default value not found for attribute: %s", attr_name);
+				return -ENOENT; // 返回标准错误码，表示路径不存在
+			}
+			len = snprintf((char *)ptr, size, "%s", default_val);
+			zfp->flags |= FS_FLAG_FILE_READ_END;
+			return len;
+#else
 			unsigned int channel_index;
 			char attr_type[16];
 
@@ -598,6 +692,7 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 			len = snprintf((char *)ptr, size, "%s", default_val);
 			zfp->flags |= FS_FLAG_FILE_READ_END;
 			return len;
+#endif
 		}
 		break;
 
