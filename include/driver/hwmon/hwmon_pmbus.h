@@ -102,15 +102,16 @@ static const char *const pmbus_attr_names[PMBUS_ATTR_COUNT] = {
 };
 #elif defined(CONFIG_BOARD_ALISMC)
 // 定义函数指针类型，便于使用
-// typedef int (*hwmon_read_func_t)(const struct device *dev, char *buf, size_t size);
-// typedef int (*hwmon_write_func_t)(const struct device *dev, const char *buf, size_t size);
+
+typedef int (*hwmon_read_func_t)(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len);
+typedef int (*hwmon_write_func_t)(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len);
 
 struct pmbus_default_values {
-    const char *attr_name;              // 属性名称
-    const char *default_value;          // 默认值字符串
-    // hwmon_read_func_t read_func;        // 读取函数指针
-    // hwmon_write_func_t write_func;      // 写入函数指针
-    // uint8_t reg_addr;                   // 寄存器地址
+    const char *attr_name;
+    const char *default_value;
+    hwmon_read_func_t read_func;
+	hwmon_write_func_t write_func;
+    uint8_t index;
 };
 // 在文件顶部添加枚举定义
 enum pmbus_attrs {

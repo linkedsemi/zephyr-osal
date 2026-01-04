@@ -109,85 +109,241 @@ static const struct pmbus_default_values pmbus_default_values[] = {
     {"name", "mp5023\n"},            // 设备名称
 };
 #elif defined(CONFIG_BOARD_ALISMC)
+
+/* Show and Store Functions */
+static int zephyr_psu_word_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    uint16_t word;
+    int ret = ali_psu_word_show(dev, reg, &word);
+    if (ret == 0 && buf != NULL && len != NULL) {
+        buf[0] = word & 0xFF;
+        buf[1] = (word >> 8) & 0xFF;
+        *len = 2;
+    }
+    return ret;
+}
+
+static int zephyr_psu_word_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    if (buf == NULL || len == NULL || *len < 2) {
+        return -EINVAL;
+    }
+    uint16_t word = buf[0] | (buf[1] << 8);
+    return ali_psu_word_store(dev, reg, word);
+}
+
+static int zephyr_psu_byte_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    uint8_t byte;
+    int ret = ali_psu_byte_show(dev, reg, &byte);
+    if (ret == 0 && buf != NULL && len != NULL) {
+        buf[0] = byte;
+        *len = 1;
+    }
+    return ret;
+}
+
+static int zephyr_psu_byte_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    if (buf == NULL) {
+        return -EINVAL;
+    }
+    return ali_psu_byte_store(dev, reg, buf[0]);
+}
+
+static int zephyr_psu_sensor_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    int64_t val;
+    int ret = ali_psu_sensor_show(dev, reg, &val);
+    if (ret == 0 && buf != NULL && len != NULL) {
+        // 将64位值存储到缓冲区中（根据实际需求调整）
+        for (int i = 0; i < sizeof(val) && i < *len; i++) {
+            buf[i] = (val >> (i * 8)) & 0xFF;
+        }
+        *len = sizeof(val);
+    }
+    return ret;
+}
+
+static int zephyr_psu_mfr_page_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    uint8_t page;
+    int ret = ali_psu_mfr_page_show(dev, &page);
+    if (ret == 0 && buf != NULL && len != NULL) {
+        buf[0] = page;
+        *len = 1;
+    }
+    return ret;
+}
+
+static int zephyr_psu_mfr_page_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    if (buf == NULL) {
+        return -EINVAL;
+    }
+    return ali_psu_mfr_page_store(dev, buf[0]);
+}
+
+static int zephyr_psu_ac_cycle_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    return ali_psu_ac_cycle_store(dev);
+}
+
+static int zephyr_psu_block_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    return ali_psu_block_show(dev, reg, buf, len);
+}
+
+static int zephyr_psu_fw_version_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    return ali_psu_fw_version_show(dev, reg, buf, len);
+}
+
+static int zephyr_psu_bootloader_str_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    return ali_psu_bootloader_str_show(dev, reg, buf, len);
+}
+
+static int zephyr_psu_bootloader_str_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    if (buf == NULL || len == NULL) {
+        return -EINVAL;
+    }
+    return ali_psu_bootloader_str_store(dev, reg, buf, *len);
+}
+
+static int zephyr_psu_bootloader_hex_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    return ali_psu_bootloader_hex_show(dev, reg, buf, len);
+}
+
+static int zephyr_psu_bootloader_hex_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    if (buf == NULL || len == NULL) {
+        return -EINVAL;
+    }
+    return ali_psu_bootloader_hex_store(dev, reg, buf, *len);
+}
+
+static int zephyr_psu_word_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    if (buf == NULL) {
+        return -EINVAL;
+    }
+    return ali_psu_word_his_show(dev, reg, buf);
+}
+
+static int zephyr_psu_byte_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    if (buf == NULL) {
+        return -EINVAL;
+    }
+    return ali_psu_byte_his_show(dev, reg, buf);
+}
+
+static int zephyr_psu_sensor_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    int64_t val;
+    int ret = ali_psu_sensor_his_show(dev, reg, &val);
+    if (ret == 0 && buf != NULL && len != NULL) {
+        // 将64位值存储到缓冲区中（根据实际需求调整）
+        for (int i = 0; i < sizeof(val) && i < *len; i++) {
+            buf[i] = (val >> (i * 8)) & 0xFF;
+        }
+        *len = sizeof(val);
+    }
+    return ret;
+}
+
+static int zephyr_psu_block_hex_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    return ali_psu_block_hex_his_show(dev, reg, buf, len);
+}
+
+static int zephyr_powerbrick_block_hex_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+{
+    return ali_powerbrick_block_hex_his_show(dev, reg, buf, len);
+}
+
 static const struct pmbus_default_values pmbus_default_values[] = {
     // 电源控制相关属性
-    {"ac_cycle", "0\n"},                           // 电源AC周期控制
-    {"auto_turn_on_delay", "0\n"},                 // 自动开机延时
+    {"ac_cycle", "0\n", NULL, zephyr_psu_ac_cycle_store, 0},                           // 电源AC周期控制
+    {"auto_turn_on_delay", "0\n", zephyr_psu_word_show, zephyr_psu_word_store, auto_turn_on_delay},                 // 自动开机延时
 
     // 风扇控制相关属性
-    {"fan_config_1_2", "0\n"},                     // 风扇配置
-    {"fan_command_1", "0\n"},                      // 风扇命令1
-    {"fan_command_2", "0\n"},                      // 风扇命令2
+    {"fan_config_1_2", "0\n", zephyr_psu_byte_show, zephyr_psu_byte_store, fan_config_1_2},                     // 风扇配置
+    {"fan_command_1", "0\n", zephyr_psu_byte_show, zephyr_psu_byte_store, fan_command_1},                      // 风扇命令1
+    {"fan_command_2", "0\n", zephyr_psu_byte_show, zephyr_psu_byte_store, fan_command_2},                      // 风扇命令2
 
     // 历史状态相关属性
-    {"his_status_word", "0\n"},                    // 历史状态字
-    {"his_status_vout", "0\n"},                    // 历史输出电压状态
-    {"his_status_iout", "0\n"},                    // 历史输出电流状态
-    {"his_status_input", "0\n"},                   // 历史输入状态
-    {"his_status_temp", "0\n"},                    // 历史温度状态
-    {"his_status_cml", "0\n"},                     // 历史通信/控制状态
-    {"his_status_mfr_spec", "0\n"},                // 历史厂商特定状态
-    {"his_status_fans12", "0\n"},                  // 历史风扇状态
+    {"his_status_word", "0\n", zephyr_psu_word_his_show, NULL, status_word},                    // 历史状态字
+    {"his_status_vout", "0\n", zephyr_psu_byte_his_show, NULL, status_vout},                    // 历史输出电压状态
+    {"his_status_iout", "0\n", zephyr_psu_byte_his_show, NULL, status_iout},                    // 历史输出电流状态
+    {"his_status_input", "0\n", zephyr_psu_byte_his_show, NULL, status_input},                   // 历史输入状态
+    {"his_status_temp", "0\n", zephyr_psu_byte_his_show, NULL, status_temp},                    // 历史温度状态
+    {"his_status_cml", "0\n", zephyr_psu_byte_his_show, NULL, status_cml},                     // 历史通信/控制状态
+    {"his_status_mfr_spec", "0\n", zephyr_psu_byte_his_show, NULL, status_mfr_spec},                // 历史厂商特定状态
+    {"his_status_fans12", "0\n", zephyr_psu_byte_his_show, NULL, status_fans12},                  // 历史风扇状态
 
     // 历史读取相关属性
-    {"his_read_vin", "0\n"},                       // 历史输入电压读数
-    {"his_read_iin", "0\n"},                       // 历史输入电流读数
-    {"his_read_vcap", "0\n"},                      // 历史电容电压读数
-    {"his_read_vout", "0\n"},                      // 历史输出电压读数
-    {"his_read_vin1", "0\n"},                      // 历史输入电压1读数
-    {"his_read_iout", "0\n"},                      // 历史输出电流读数
-    {"his_read_temp1", "0\n"},                     // 历史温度1读数
-    {"his_read_temp2", "0\n"},                     // 历史温度2读数
-    {"his_read_temp3", "0\n"},                     // 历史温度3读数
-    {"his_read_fan_speed1", "0\n"},                // 历史风扇速度1读数
-    {"his_read_pout", "0\n"},                      // 历史输出功率读数
-    {"his_read_pin", "0\n"},                       // 历史输入功率读数
-    {"his_mfr_pos_total", "0\n"},                  // 历史厂商位置总数
-    {"his_mfr_pos_last", "0\n"},                   // 历史厂商最后位置
+    {"his_read_vin", "0\n", zephyr_psu_sensor_his_show, NULL, read_vin},                       // 历史输入电压读数
+    {"his_read_iin", "0\n", zephyr_psu_sensor_his_show, NULL, read_iin},                       // 历史输入电流读数
+    {"his_read_vcap", "0\n", zephyr_psu_word_his_show, NULL, read_vcap},                      // 历史电容电压读数
+    {"his_read_vout", "0\n", zephyr_psu_sensor_his_show, NULL, read_vout},                      // 历史输出电压读数
+    {"his_read_vin1", "0\n", zephyr_psu_sensor_his_show, NULL, read_vin1},                      // 历史输入电压1读数
+    {"his_read_iout", "0\n", zephyr_psu_sensor_his_show, NULL, read_iout},                      // 历史输出电流读数
+    {"his_read_temp1", "0\n", zephyr_psu_sensor_his_show, NULL, read_temp1},                     // 历史温度1读数
+    {"his_read_temp2", "0\n", zephyr_psu_sensor_his_show, NULL, read_temp2},                     // 历史温度2读数
+    {"his_read_temp3", "0\n", zephyr_psu_sensor_his_show, NULL, read_temp3},                     // 历史温度3读数
+    {"his_read_fan_speed1", "0\n", zephyr_psu_sensor_his_show, NULL, read_fan_speed1},                // 历史风扇速度1读数
+    {"his_read_pout", "0\n", zephyr_psu_sensor_his_show, NULL, read_pout},                      // 历史输出功率读数
+    {"his_read_pin", "0\n", zephyr_psu_sensor_his_show, NULL, read_pin},                       // 历史输入功率读数
+    {"his_mfr_pos_total", "0\n", zephyr_psu_block_hex_his_show, NULL, mfr_pos_total},                  // 历史厂商位置总数
+    {"his_mfr_pos_last", "0\n", zephyr_psu_block_hex_his_show, NULL, mfr_pos_last},                   // 历史厂商最后位置
 
     // 事件索引和读取相关属性
-    {"delta_event_index", "0\n"},                  // Delta事件索引
-    {"his_delta_read_event", "0\n"},               // Delta历史事件读取
-    {"acep_event_index", "0\n"},                   // ACEP事件索引
-    {"his_acep_read_event", "0\n"},                // ACEP历史事件读取
+    {"delta_event_index", "0\n", zephyr_psu_word_show, zephyr_psu_word_store, delta_event_index},                  // Delta事件索引
+    {"his_delta_read_event", "0\n", zephyr_powerbrick_block_hex_his_show, NULL, delta_read_event},               // Delta历史事件读取
+    {"acep_event_index", "0\n", zephyr_psu_byte_show, zephyr_psu_byte_store, acep_event_index},                   // ACEP事件索引
+    {"his_acep_read_event", "0\n", zephyr_powerbrick_block_hex_his_show, NULL, acep_read_event},                // ACEP历史事件读取
 
     // 制造商信息相关属性
-    {"mfr_id", "AliPSU\n"},                        // 制造商ID
-    {"mfr_model", "ALI-PSU\n"},                    // 制造商型号
-    {"mfr_location", "China\n"},                   // 制造商位置
-    {"mfr_date", "20240101\n"},                    // 制造日期
-    {"mfr_sn", "ALI00000000\n"},                   // 制造商序列号
-    {"mfr_psu_defined", "0\n"},                    // 制造商定义字段
+    {"mfr_id", "AliPSU\n", zephyr_psu_block_show, NULL, mfr_id},                        // 制造商ID
+    {"mfr_model", "ALI-PSU\n", zephyr_psu_block_show, NULL, mfr_model},                    // 制造商型号
+    {"mfr_location", "China\n", zephyr_psu_block_show, NULL, mfr_location},                   // 制造商位置
+    {"mfr_date", "20240101\n", zephyr_psu_block_show, NULL, mfr_date},                    // 制造日期
+    {"mfr_sn", "ALI00000000\n", zephyr_psu_block_show, NULL, mfr_sn},                   // 制造商序列号
+    {"mfr_psu_defined", "0\n", zephyr_psu_byte_show, NULL, mfr_psu_defined},                    // 制造商定义字段
 
     // 版本和状态相关属性
-    {"hw_version", "1.0\n"},                       // 硬件版本
-    {"fw_version", "1.0\n"},                       // 固件版本
-    {"status0_other", "0\n"},                      // 其他状态
-    {"line_status", "0\n"},                        // 线路状态
-    {"match_status", "0\n"},                       // 匹配状态
-    {"status0_input_b", "0\n"},                    // 输入B状态
-    {"input_channel_status", "0\n"},               // 输入通道状态
-    {"power_supply_mode", "0\n"},                  // 电源模式
+    {"hw_version", "1.0\n", zephyr_psu_block_show, NULL, mfr_hw_rev},                       // 硬件版本
+    {"fw_version", "1.0\n", zephyr_psu_fw_version_show, NULL, fw_rev},                       // 固件版本
+    {"status0_other", "0\n", zephyr_psu_byte_show, NULL, status_other},                      // 其他状态
+    {"line_status", "0\n", zephyr_psu_byte_show, NULL, line_status},                        // 线路状态
+    {"match_status", "0\n", zephyr_psu_byte_show, NULL, match_status},                       // 匹配状态
+    {"status0_input_b", "0\n", zephyr_psu_byte_show, NULL, status_input_b},                    // 输入B状态
+    {"input_channel_status", "0\n", zephyr_psu_byte_show, NULL, input_channel_status},               // 输入通道状态
+    {"power_supply_mode", "0\n", zephyr_psu_byte_show, zephyr_psu_byte_store, power_supply_mode},                  // 电源模式
 
     // 页和引导加载程序相关属性
-    {"mfr_page", "0\n"},                           // 制造商页
-    {"mfr_pos_total", "0\n"},                      // 制造商位置总数
-    {"mfr_pos_last", "0\n"},                       // 制造商最后位置
-    {"bootloader_key", "0\n"},                     // 引导加载程序密钥
-    {"bootloader_product_key", "0\n"},             // 引导加载程序产品密钥
-    {"bootloader_status", "0\n"},                  // 引导加载程序状态
-    {"bootloader_memory16", "0\n"},                // 引导加载程序内存16
-    {"bootloader_memory32", "0\n"},                // 引导加载程序内存32
+    {"mfr_page", "0\n", zephyr_psu_mfr_page_show, zephyr_psu_mfr_page_store, mfr_page},                           // 制造商页
+    {"mfr_pos_total", "0\n", zephyr_psu_bootloader_str_show, NULL, mfr_pos_total},                      // 制造商位置总数
+    {"mfr_pos_last", "0\n", zephyr_psu_bootloader_str_show, NULL, mfr_pos_last},                       // 制造商最后位置
+    {"bootloader_key", "0\n", zephyr_psu_bootloader_str_show, zephyr_psu_bootloader_str_store, bootloader_key},                     // 引导加载程序密钥
+    {"bootloader_product_key", "0\n", zephyr_psu_bootloader_str_show, zephyr_psu_bootloader_str_store, bootloader_product_key},             // 引导加载程序产品密钥
+    {"bootloader_status", "0\n", zephyr_psu_bootloader_hex_show, zephyr_psu_bootloader_hex_store, bootloader_status},                  // 引导加载程序状态
+    {"bootloader_memory16", "0\n", zephyr_psu_bootloader_hex_show, zephyr_psu_bootloader_str_store, bootloader_memory16},                // 引导加载程序内存16
+    {"bootloader_memory32", "0\n", zephyr_psu_bootloader_hex_show, zephyr_psu_bootloader_str_store, bootloader_memory32},                // 引导加载程序内存32
 
     // 电流共享相关属性
-    {"curr_share_adjust_en", "0\n"},               // 电流共享调整使能
-    {"curr_share_adjust", "0\n"},                  // 电流共享调整
-    {"curr_share_compensation_read", "0\n"},       // 电流共享补偿读取
-    {"curr_share_compensation_write", "0\n"},      // 电流共享补偿写入
-    {"curr_iout_filter", "0\n"},                   // 输出电流滤波
+    {"curr_share_adjust_en", "0\n", zephyr_psu_byte_show, zephyr_psu_byte_store, curr_share_adjust_en},               // 电流共享调整使能
+    {"curr_share_adjust", "0\n", zephyr_psu_byte_show, zephyr_psu_byte_store, curr_share_adjust},                  // 电流共享调整
+    {"curr_share_compensation_read", "0\n", zephyr_psu_word_show, zephyr_psu_word_store, curr_share_compensation_read},       // 电流共享补偿读取
+    {"curr_share_compensation_write", "0\n", zephyr_psu_word_show, zephyr_psu_word_store, curr_share_compensation_write},      // 电流共享补偿写入
+    {"curr_iout_filter", "0\n", zephyr_psu_sensor_show, NULL, curr_iout_filter},                   // 输出电流滤波
 
     // 设备名称
-    {"name", "alipsu\n"},                          // 设备名称
+    {"name", "alipsu\n", NULL, NULL, 0x00},                          // 设备名称
 };
 #endif
 
@@ -633,14 +789,36 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 	case HWMON_PMBUS:
 		if (strlen(attr_name) > 0) {
 #if defined(CONFIG_BOARD_ALISMC)
-			const char *default_val = find_pmbus_default_value(attr_name);
-			if (!default_val) {
-				LOG_ERROR("Default value not found for attribute: %s", attr_name);
-				return -ENOENT; // 返回标准错误码，表示路径不存在
+			// 遍历pmbus_default_values数组查找对应的属性
+			for (int i = 0; i < ARRAY_SIZE(pmbus_default_values); i++) {
+				if (strcmp(pmbus_default_values[i].attr_name, attr_name) == 0) {
+					// 如果有特定的show函数，则调用它
+					if (pmbus_default_values[i].read_func) {
+						// 调用特定的show函数来获取值
+						char temp_buf[64];
+						uint8_t temp_len = sizeof(temp_buf);
+						ret = pmbus_default_values[i].read_func(cfg->in[0].dev,
+																ali_psu_regs[pmbus_default_values[i].index],
+																temp_buf,
+																&temp_len);
+						if (ret >= 0) {
+							len = snprintf((char *)ptr, size, "%s", temp_buf);
+							zfp->flags |= FS_FLAG_FILE_READ_END;
+							return len;
+						} else {
+							// 如果特定函数失败，返回默认值
+							LOG_ERROR("Show function failed for attribute %s, using default", attr_name);
+						}
+					}
+					// 如果没有特定的show函数或函数失败，返回默认值
+					len = snprintf((char *)ptr, size, "%s", pmbus_default_values[i].default_value);
+					zfp->flags |= FS_FLAG_FILE_READ_END;
+					return len;
+				}
 			}
-			len = snprintf((char *)ptr, size, "%s", default_val);
-			zfp->flags |= FS_FLAG_FILE_READ_END;
-			return len;
+			// 如果没找到属性，返回错误
+			LOG_ERROR("Attribute %s not found in pmbus_default_values", attr_name);
+			return -ENOENT;
 #else
 			unsigned int channel_index;
 			char attr_type[16];
@@ -814,6 +992,113 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 
 	zfp->flags |= FS_FLAG_FILE_READ_END;
 	return len > 0 ? len : 0;
+}
+
+static ssize_t hwmondev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
+{
+	int ret = 0;
+
+	LOG_DBG("Reading from hwmon device");
+
+	if (!zfp || !ptr) {
+		LOG_ERROR("Invalid parameters");
+		return -EINVAL;
+	}
+
+	struct hwmon_file_handle *handle = zfp->filep;
+	if (!handle) {
+		LOG_ERROR("No client context");
+		return -EINVAL;
+	}
+
+	struct hwmon_device_info *client = handle->device;
+	const char *attr_name = handle->attr_name;
+
+	if (size > CONFIG_HWMON_DEV_MAX_SIZE) {
+		size = CONFIG_HWMON_DEV_MAX_SIZE;
+	}
+
+	// 检查是否已经读取完成
+	if (zfp->flags & FS_FLAG_FILE_READ_END) {
+		if (handle->nonblocking) {
+			return -EAGAIN;
+		}
+		return 0;
+	}
+
+	const struct hwmon_ls_config *cfg = hwmon_ls_get_config(client->dev);
+	if (!cfg) {
+		LOG_ERROR("Failed to get hwmon configuration");
+		return -ENODEV;
+	}
+
+	switch (cfg->class) {
+	case HWMON_FAN:  // TODO:
+		break;
+	case HWMON_ADC:
+		break;
+	case HWMON_TEMP: // TODO:
+		break;
+	case HWMON_SENSOR:	// TODO:
+		break;
+	case HWMON_PMBUS:
+#if defined(CONFIG_BOARD_ALISMC)
+		uint8_t old_page = 0;
+		ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
+		if (ret < 0) {
+			LOG_ERROR("Failed to read current page: %d", old_page);
+			return -EIO;
+		}
+
+		ret = ali_psu_mfr_page_store(cfg->in[0].dev, old_page+1);
+		if (ret < 0) {
+			LOG_ERROR("Failed to store new page: %d", old_page+1);
+			return -EIO;
+		}
+
+		ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
+		if (ret < 0) {
+			LOG_ERROR("Read current updated page: %d", old_page);
+			return -EIO;
+		}
+		for (int i = 0; i < ARRAY_SIZE(pmbus_default_values); i++) {
+			if (strcmp(pmbus_default_values[i].attr_name, attr_name) == 0) {
+				// 检查是否有写入函数
+				if (pmbus_default_values[i].write_func) {
+					// 调用特定的store函数来处理写入
+					uint8_t write_len = size;
+					ret = pmbus_default_values[i].write_func(cfg->in[0].dev,
+															ali_psu_regs[pmbus_default_values[i].index],
+															(uint8_t *)ptr,
+															&write_len);
+					if (ret >= 0) {
+						// 成功写入后，更新默认值（如果需要）
+						return size; // 返回写入的字节数
+					} else {
+						LOG_ERROR("write function failed for attribute %s", attr_name);
+						return ret;
+					}
+				} else {
+					// 如果没有写入函数，返回错误
+					LOG_ERROR("Write operation not supported for attribute %s", attr_name);
+					return -EPERM; // 操作不允许
+				}
+			}
+		}
+		// 如果没找到属性，返回错误
+		LOG_ERROR("Attribute %s not found in pmbus_default_values", attr_name);
+		return -ENOENT;
+#endif
+		break;
+	case HWMON_MOC_FPGA:
+        break;
+    default:
+		LOG_ERROR("Unsupported device class: %d", cfg->class);
+		return -ENOTTY;
+	}
+
+	zfp->flags |= FS_FLAG_FILE_READ_END;
+	return size > 0 ? size : 0;
 }
 
 static int hwmon_poll_prepare_ctx(struct hwmon_file_handle *handle,
@@ -1215,7 +1500,7 @@ static const struct fs_file_system_t hwmondev_fs = {
 	.open = hwmondev_open,
 	.close = hwmondev_close,
 	.read = hwmondev_read,
-	.write = NULL,
+	.write = hwmondev_write,
 	.lseek = NULL,
 	.ioctl = hwmondev_ioctl,
 	.opendir = hwmondev_opendir,
