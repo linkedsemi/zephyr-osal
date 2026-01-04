@@ -187,13 +187,14 @@ static int uartdev_open(struct fs_file_t *zfp, const char *path, fs_mode_t mode)
     //注册uart设备读写回调函数
 	uart_dev->tx_busy = 0;
 	uart_irq_callback_user_data_set(uart_dev->dev, uart_callback, (void *)uart_dev);
-	uart_irq_rx_enable(uart_dev->dev);
     // printk("uart_irq_rx_enable!regVal=0x%x\n", *((int*)(0x40088004)) );
     //初始化 poll event，等待 signal
     k_poll_signal_init(&uart_dev->poll_sig);
     // printk("%s:%d\n", __func__, __LINE__);
     
     zfp->filep = uart_dev;
+
+    uart_irq_rx_enable(uart_dev->dev);
     return 0;
 }
 
