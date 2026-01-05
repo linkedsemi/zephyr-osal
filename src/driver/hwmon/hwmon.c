@@ -26,7 +26,7 @@
 LOG_MODULE_REGISTER(hwmon_dev, LOG_LEVEL_ERR);
 
 #define CONFIG_HWMON_DEV_MAX_SIZE 8192
-#define MAX_HWMON_DEVICES 8
+#define MAX_HWMON_DEVICES 32
 #define MAX_ATTR_NAME_LEN 32
 
 #define DT_DRV_COMPAT linkedsemi_hwmon
