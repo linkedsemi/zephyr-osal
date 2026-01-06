@@ -107,6 +107,7 @@ static const struct pmbus_default_values pmbus_default_values[] = {
     {"name", "mp5023\n"},            // 设备名称
 };
 
+#if defined(CONFIG_BOARD_ALIMOC30) || defined(CONFIG_BOARD_ALIMOC31)
 static const char *adc_file[] = {
 	"in1_input",
 	"in2_input",
@@ -123,6 +124,26 @@ static const char *adc_file[] = {
 	"in13_input",
 	"name"
 };
+#elif defined(CONFIG_BOARD_ALISMC)
+static const char *adc_file[] = {
+	"in1_input",
+	"in2_input",
+	"in3_input",
+	"in4_input",
+	"in5_input",
+	"in6_input",
+	"in7_input",
+	"in8_input",
+	"in9_input",
+	"in10_input",
+	"in11_input",
+	"in12_input",
+	"in13_input",
+	"in14_input",
+	"in15_input",
+	"name"
+};
+#endif
 
 // 查找属性默认值
 static const char *find_pmbus_default_value(const char *attr_name)
