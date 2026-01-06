@@ -1,5 +1,7 @@
 #include "hwmon.h"
+#ifdef CONFIG_BOARD_ALISMC
 #include "psu.h"
+#endif
 
 
 // PMBUS设备默认值配置结构体定义
