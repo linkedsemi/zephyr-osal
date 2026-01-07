@@ -342,6 +342,93 @@ static const struct pmbus_default_values pmbus_default_values[] = {
     {"curr_share_compensation_write", "0\n", zephyr_psu_word_show, zephyr_psu_word_store, curr_share_compensation_write},      // 电流共享补偿写入
     {"curr_iout_filter", "0\n", zephyr_psu_sensor_show, NULL, curr_iout_filter},                   // 输出电流滤波
 
+	 // 其他属性
+    // {"device", "ALI-PSU\n", NULL, NULL, 0},                             // 设备
+    // {"subsystem", "power\n", NULL, NULL, 0},                           // 子系统
+    {"in2_input", "0\n", NULL, NULL, 0},                      // 输入2
+    {"in2_label", "vcap\n", NULL, NULL, 0},                             // 输入2标签
+    {"in3_crit", "0\n", NULL, NULL, 0},                     // 输入3临界值
+    {"in3_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入3临界报警
+    {"in3_input", "0\n", NULL, NULL, 0},                      // 输入3
+    {"in3_label", "vout1\n", NULL, NULL, 0},                             // 输入3标签
+    {"in3_lcrit", "0\n", NULL, NULL, 0},                    // 输入3低临界值
+    {"in3_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入3低临界报警
+    {"in3_rated_max", "55636\n", NULL, NULL, 0},                   // 输入3额定最大值
+    {"in3_rated_min", "0\n", NULL, NULL, 0},                   // 输入3额定最小值
+    {"in4_beep", "0\n", NULL, NULL, 0},                      // 输入4蜂鸣器
+    {"in4_crit", "0\n", NULL, NULL, 0},                     // 输入4临界值
+    {"in4_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入4临界报警
+    {"in4_fault", "0\n", NULL, NULL, 0},                         // 输入4故障
+    {"in4_input", "0\n", NULL, NULL, 0},                      // 输入4
+    {"in4_label", "vin1\n", NULL, NULL, 0},                             // 输入4标签
+    {"in4_lcrit", "0\n", NULL, NULL, 0},                    // 输入4低临界值
+    {"in4_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入4低临界报警
+    {"in4_rated_max", "264000\n", NULL, NULL, 0},                   // 输入4额定最大值
+    {"in4_rated_min", "0\n", NULL, NULL, 0},                   // 输入4额定最小值
+    {"in1_beep", "0\n", NULL, NULL, 0},                      // 输入1蜂鸣器
+    {"in1_crit", "0\n", NULL, NULL, 0},                     // 输入1临界值
+    {"in1_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入1临界报警
+    {"in1_fault", "0\n", NULL, NULL, 0},                         // 输入1故障
+    {"in1_input", "0\n", NULL, NULL, 0},                      // 输入1
+    {"in1_label", "in1\n", NULL, NULL, 0},                             // 输入1标签
+    {"in1_lcrit", "0\n", NULL, NULL, 0},                    // 输入1低临界值
+    {"in1_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入1低临界报警
+    {"in1_rated_max", "264000\n", NULL, NULL, 0},                   // 输入1额定最大值
+    {"in1_rated_min", "0\n", NULL, NULL, 0},                   // 输入1额定最小值
+    {"curr1_input", "0\n", NULL, NULL, 0},                   // 电流1输入
+    {"curr1_label", "iin\n", NULL, NULL, 0},                          // 电流1标签
+    {"curr1_max", "25000\n", NULL, NULL, 0},                    // 电流1最大值
+    {"curr1_max_alarm", "0\n", NULL, NULL, 0},                 // 电流1最大报警
+    {"curr1_rated_max", "22000\n", NULL, NULL, 0},                // 电流1额定最大值
+    {"curr2_crit", "0\n", NULL, NULL, 0},                   // 电流2临界值
+    {"curr2_crit_alarm", "0\n", NULL, NULL, 0},                // 电流2临界报警
+    {"curr2_input", "0\n", NULL, NULL, 0},                   // 电流2输入
+    {"curr2_label", "iout1\n", NULL, NULL, 0},                          // 电流2标签
+    {"curr2_max", "71000\n", NULL, NULL, 0},                    // 电流2最大值
+    {"curr2_max_alarm", "0\n", NULL, NULL, 0},                 // 电流2最大报警
+    {"curr2_rated_max", "61125\n", NULL, NULL, 0},                // 电流2额定最大值
+    {"fan1_alarm", "0\n", NULL, NULL, 0},                       // 风扇1报警
+    {"fan1_fault", "0\n", NULL, NULL, 0},                       // 风扇1故障
+    {"fan1_input", "0\n", NULL, NULL, 0},                     // 风扇1输入
+    {"fan1_target", "0\n", NULL, NULL, 0},                // 风扇1目标
+    {"fan2_alarm", "0\n", NULL, NULL, 0},                       // 风扇2报警
+    {"fan2_fault", "0\n", NULL, NULL, 0},                       // 风扇2故障
+    {"fan2_input", "0\n", NULL, NULL, 0},                     // 风扇2输入
+    // {"power", "0\n", NULL, NULL, 0},                              // 功率
+    {"power1_alarm", "0\n", NULL, NULL, 0},                    // 功率1报警
+    {"power1_input", "0\n", NULL, NULL, 0},                  // 功率1输入
+    {"power1_label", "pin\n", NULL, NULL, 0},                        // 功率1标签
+    {"power1_max", "4296000000\n", NULL, NULL, 0},                   // 功率1最大值
+    {"power1_rated_max", "3800000000\n", NULL, NULL, 0},              // 功率1额定最大值
+    {"power2_input", "0\n", NULL, NULL, 0},                  // 功率2输入
+    {"power2_label", "pout1\n", NULL, NULL, 0},                        // 功率2标签
+    {"power2_max", "3796000000\n", NULL, NULL, 0},                   // 功率2最大值
+    {"power2_max_alarm", "0\n", NULL, NULL, 0},                // 功率2最大报警
+    {"power2_rated_max", "3300000000\n", NULL, NULL, 0},              // 功率2额定最大值
+    {"temp1_crit", "0\n", NULL, NULL, 0},                  // 温度1临界值
+    {"temp1_crit_alarm", "0\n", NULL, NULL, 0},               // 温度1临界报警
+    {"temp1_input", "0\n", NULL, NULL, 0},                   // 温度1输入
+    {"temp1_max", "120000\n", NULL, NULL, 0},                    // 温度1最大值
+    {"temp1_max_alarm", "0\n", NULL, NULL, 0},                // 温度1最大报警
+    {"temp1_rated_max", "62000\n", NULL, NULL, 0},               // 温度1额定最大值
+    {"temp2_crit", "0\n", NULL, NULL, 0},                  // 温度2临界值
+    {"temp2_crit_alarm", "0\n", NULL, NULL, 0},               // 温度2临界报警
+    {"temp2_input", "0\n", NULL, NULL, 0},                   // 温度2输入
+    {"temp2_max", "120000\n", NULL, NULL, 0},                    // 温度2最大值
+    {"temp2_max_alarm", "0\n", NULL, NULL, 0},                // 温度2最大报警
+    {"temp2_rated_max", "120000\n", NULL, NULL, 0},               // 温度2额定最大值
+    {"temp3_crit", "0\n", NULL, NULL, 0},                  // 温度3临界值
+    {"temp3_crit_alarm", "0\n", NULL, NULL, 0},               // 温度3临界报警
+    {"temp3_input", "0\n", NULL, NULL, 0},                   // 温度3输入
+    {"temp3_max", "120000\n", NULL, NULL, 0},                    // 温度3最大值
+    {"temp3_max_alarm", "0\n", NULL, NULL, 0},                // 温度3最大报警
+    {"temp3_rated_max", "115000\n", NULL, NULL, 0},               // 温度3额定最大值
+    // {"of_node", "ali-psu\n", NULL, NULL, 0},                           // OF节点
+    {"pwm1", "0\n", NULL, NULL, 0},                    // PWM1
+    {"pwm1_enable", "0\n", NULL, NULL, 0},               // PWM1使能
+    // {"update", "0\n", NULL, NULL, 0},                     // 更新
+    // {"uevent", "0\n", NULL, NULL, 0},                    // U事件                        // OF节点
+
     // 设备名称
     {"name", "alipsu\n", NULL, NULL, 0x00},                          // 设备名称
 };
@@ -563,7 +650,7 @@ static int hwmondev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t
 	}
 
 	// 分配文件句柄
-	struct hwmon_file_handle *handle = k_malloc(sizeof(struct hwmon_file_handle));  //最好使用全局数组实现文件存储
+	struct hwmon_file_handle *handle = malloc(sizeof(struct hwmon_file_handle));  //最好使用全局数组实现文件存储
 	if (!handle) {
 		LOG_ERROR("Failed to allocate file handle");
 		return -ENOMEM;
@@ -789,6 +876,24 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 	case HWMON_PMBUS:
 		if (strlen(attr_name) > 0) {
 #if defined(CONFIG_BOARD_ALISMC)
+			// uint8_t old_page = 0;
+			// ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
+			// if (ret < 0) {
+			// 	LOG_ERROR("Failed to read current page: %d", old_page);
+			// 	return -EIO;
+			// }
+
+			// ret = ali_psu_mfr_page_store(cfg->in[0].dev, old_page+1);
+			// if (ret < 0) {
+			// 	LOG_ERROR("Failed to store new page: %d", old_page+1);
+			// 	return -EIO;
+			// }
+
+			// ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
+			// if (ret < 0) {
+			// 	LOG_ERROR("Read current updated page: %d", old_page);
+			// 	return -EIO;
+			// }
 			// 遍历pmbus_default_values数组查找对应的属性
 			for (int i = 0; i < ARRAY_SIZE(pmbus_default_values); i++) {
 				if (strcmp(pmbus_default_values[i].attr_name, attr_name) == 0) {
@@ -1043,24 +1148,24 @@ static ssize_t hwmondev_write(struct fs_file_t *zfp, const void *ptr, size_t siz
 		break;
 	case HWMON_PMBUS:
 #if defined(CONFIG_BOARD_ALISMC)
-		uint8_t old_page = 0;
-		ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
-		if (ret < 0) {
-			LOG_ERROR("Failed to read current page: %d", old_page);
-			return -EIO;
-		}
+		// uint8_t old_page = 0;
+		// ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
+		// if (ret < 0) {
+		// 	LOG_ERROR("Failed to read current page: %d", old_page);
+		// 	return -EIO;
+		// }
 
-		ret = ali_psu_mfr_page_store(cfg->in[0].dev, old_page+1);
-		if (ret < 0) {
-			LOG_ERROR("Failed to store new page: %d", old_page+1);
-			return -EIO;
-		}
+		// ret = ali_psu_mfr_page_store(cfg->in[0].dev, old_page+1);
+		// if (ret < 0) {
+		// 	LOG_ERROR("Failed to store new page: %d", old_page+1);
+		// 	return -EIO;
+		// }
 
-		ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
-		if (ret < 0) {
-			LOG_ERROR("Read current updated page: %d", old_page);
-			return -EIO;
-		}
+		// ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
+		// if (ret < 0) {
+		// 	LOG_ERROR("Read current updated page: %d", old_page);
+		// 	return -EIO;
+		// }
 		for (int i = 0; i < ARRAY_SIZE(pmbus_default_values); i++) {
 			if (strcmp(pmbus_default_values[i].attr_name, attr_name) == 0) {
 				// 检查是否有写入函数
@@ -1227,7 +1332,7 @@ static int hwmondev_opendir(struct fs_dir_t *dp, const char *path)
 
 	// 根目录处理
 	if (strcmp(path, HWMON_MNT_POINT) == 0) {
-		struct hwmon_dir_ctx *ctx = k_malloc(sizeof(struct hwmon_dir_ctx));
+		struct hwmon_dir_ctx *ctx = malloc(sizeof(struct hwmon_dir_ctx));
 		if (!ctx) {
 			return -ENOMEM;
 		}
@@ -1246,7 +1351,7 @@ static int hwmondev_opendir(struct fs_dir_t *dp, const char *path)
 
 		if (sscanf(dev_part, "hwmon%u", &device_index) == 1) {
 			if (device_index < HWMON_NUM) {
-				struct hwmon_dir_ctx *ctx = k_malloc(sizeof(struct hwmon_dir_ctx));
+				struct hwmon_dir_ctx *ctx = malloc(sizeof(struct hwmon_dir_ctx));
 				if (!ctx) {
 					return -ENOMEM;
 				}
