@@ -258,6 +258,11 @@ enum pmbus_attrs {
     PMBUS_PWM1_ENABLE,
     // PMBUS_UPDATE,
     // PMBUS_UEVENT,
+	PMBUS_FAN1_LABEL,
+	PMBUS_FAN2_LABEL,
+	PMBUS_TEMP1_LABEL,
+	PMBUS_TEMP2_LABEL,
+	PMBUS_TEMP3_LABEL,
 	PMBUS_NAME,
     PMBUS_ATTR_COUNT
 };
@@ -407,6 +412,11 @@ static const char *const pmbus_attr_names[PMBUS_ATTR_COUNT] = {
     [PMBUS_PWM1_ENABLE] = "pwm1_enable",
     // [PMBUS_UPDATE] = "update",
     // [PMBUS_UEVENT] = "uevent",
+	[PMBUS_FAN1_LABEL] = "fan1_label",
+	[PMBUS_FAN2_LABEL] = "fan2_label",
+	[PMBUS_TEMP1_LABEL] = "temp1_label",
+	[PMBUS_TEMP2_LABEL] = "temp2_label",
+	[PMBUS_TEMP3_LABEL]	= "temp3_label",
 	[PMBUS_NAME] = "name",
 };
 #endif

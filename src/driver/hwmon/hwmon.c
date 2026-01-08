@@ -345,90 +345,94 @@ static const struct pmbus_default_values pmbus_default_values[] = {
 	 // 其他属性
     // {"device", "ALI-PSU\n", NULL, NULL, 0},                             // 设备
     // {"subsystem", "power\n", NULL, NULL, 0},                           // 子系统
-    {"in2_input", "0\n", NULL, NULL, 0},                      // 输入2
+    {"in2_input", "409500\n", NULL, NULL, 0},                      // 输入2
     {"in2_label", "vcap\n", NULL, NULL, 0},                             // 输入2标签
-    {"in3_crit", "0\n", NULL, NULL, 0},                     // 输入3临界值
+    {"in3_crit", "58500\n", NULL, NULL, 0},                     // 输入3临界值
     {"in3_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入3临界报警
-    {"in3_input", "0\n", NULL, NULL, 0},                      // 输入3
+    {"in3_input", "54968\n", NULL, NULL, 0},                      // 输入3
     {"in3_label", "vout1\n", NULL, NULL, 0},                             // 输入3标签
-    {"in3_lcrit", "0\n", NULL, NULL, 0},                    // 输入3低临界值
+    {"in3_lcrit", "45000\n", NULL, NULL, 0},                    // 输入3低临界值
     {"in3_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入3低临界报警
     {"in3_rated_max", "55636\n", NULL, NULL, 0},                   // 输入3额定最大值
     {"in3_rated_min", "0\n", NULL, NULL, 0},                   // 输入3额定最小值
     {"in4_beep", "0\n", NULL, NULL, 0},                      // 输入4蜂鸣器
-    {"in4_crit", "0\n", NULL, NULL, 0},                     // 输入4临界值
+    {"in4_crit", "295000\n", NULL, NULL, 0},                     // 输入4临界值
     {"in4_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入4临界报警
     {"in4_fault", "0\n", NULL, NULL, 0},                         // 输入4故障
-    {"in4_input", "0\n", NULL, NULL, 0},                      // 输入4
+    {"in4_input", "230000\n", NULL, NULL, 0},                      // 输入4
     {"in4_label", "vin1\n", NULL, NULL, 0},                             // 输入4标签
-    {"in4_lcrit", "0\n", NULL, NULL, 0},                    // 输入4低临界值
+    {"in4_lcrit", "78000\n", NULL, NULL, 0},                    // 输入4低临界值
     {"in4_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入4低临界报警
     {"in4_rated_max", "264000\n", NULL, NULL, 0},                   // 输入4额定最大值
     {"in4_rated_min", "0\n", NULL, NULL, 0},                   // 输入4额定最小值
     {"in1_beep", "0\n", NULL, NULL, 0},                      // 输入1蜂鸣器
-    {"in1_crit", "0\n", NULL, NULL, 0},                     // 输入1临界值
+    {"in1_crit", "295000\n", NULL, NULL, 0},                     // 输入1临界值
     {"in1_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入1临界报警
     {"in1_fault", "0\n", NULL, NULL, 0},                         // 输入1故障
-    {"in1_input", "0\n", NULL, NULL, 0},                      // 输入1
+    {"in1_input", "229500\n", NULL, NULL, 0},                      // 输入1
     {"in1_label", "in1\n", NULL, NULL, 0},                             // 输入1标签
-    {"in1_lcrit", "0\n", NULL, NULL, 0},                    // 输入1低临界值
+    {"in1_lcrit", "78000\n", NULL, NULL, 0},                    // 输入1低临界值
     {"in1_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入1低临界报警
     {"in1_rated_max", "264000\n", NULL, NULL, 0},                   // 输入1额定最大值
     {"in1_rated_min", "0\n", NULL, NULL, 0},                   // 输入1额定最小值
-    {"curr1_input", "0\n", NULL, NULL, 0},                   // 电流1输入
+    {"curr1_input", "2757\n", NULL, NULL, 0},                   // 电流1输入
     {"curr1_label", "iin\n", NULL, NULL, 0},                          // 电流1标签
     {"curr1_max", "25000\n", NULL, NULL, 0},                    // 电流1最大值
     {"curr1_max_alarm", "0\n", NULL, NULL, 0},                 // 电流1最大报警
     {"curr1_rated_max", "22000\n", NULL, NULL, 0},                // 电流1额定最大值
-    {"curr2_crit", "0\n", NULL, NULL, 0},                   // 电流2临界值
+    {"curr2_crit", "79500\n", NULL, NULL, 0},                   // 电流2临界值
     {"curr2_crit_alarm", "0\n", NULL, NULL, 0},                // 电流2临界报警
-    {"curr2_input", "0\n", NULL, NULL, 0},                   // 电流2输入
+    {"curr2_input", "10328\n", NULL, NULL, 0},                   // 电流2输入
     {"curr2_label", "iout1\n", NULL, NULL, 0},                          // 电流2标签
     {"curr2_max", "71000\n", NULL, NULL, 0},                    // 电流2最大值
     {"curr2_max_alarm", "0\n", NULL, NULL, 0},                 // 电流2最大报警
     {"curr2_rated_max", "61125\n", NULL, NULL, 0},                // 电流2额定最大值
     {"fan1_alarm", "0\n", NULL, NULL, 0},                       // 风扇1报警
     {"fan1_fault", "0\n", NULL, NULL, 0},                       // 风扇1故障
-    {"fan1_input", "0\n", NULL, NULL, 0},                     // 风扇1输入
+    {"fan1_input", "3780\n", NULL, NULL, 0},                     // 风扇1输入
     {"fan1_target", "0\n", NULL, NULL, 0},                // 风扇1目标
     {"fan2_alarm", "0\n", NULL, NULL, 0},                       // 风扇2报警
     {"fan2_fault", "0\n", NULL, NULL, 0},                       // 风扇2故障
-    {"fan2_input", "0\n", NULL, NULL, 0},                     // 风扇2输入
+    {"fan2_input", "3512\n", NULL, NULL, 0},                     // 风扇2输入
     // {"power", "0\n", NULL, NULL, 0},                              // 功率
     {"power1_alarm", "0\n", NULL, NULL, 0},                    // 功率1报警
-    {"power1_input", "0\n", NULL, NULL, 0},                  // 功率1输入
+    {"power1_input", "591000000\n", NULL, NULL, 0},                  // 功率1输入
     {"power1_label", "pin\n", NULL, NULL, 0},                        // 功率1标签
     {"power1_max", "4296000000\n", NULL, NULL, 0},                   // 功率1最大值
     {"power1_rated_max", "3800000000\n", NULL, NULL, 0},              // 功率1额定最大值
-    {"power2_input", "0\n", NULL, NULL, 0},                  // 功率2输入
+    {"power2_input", "567000000\n", NULL, NULL, 0},                  // 功率2输入
     {"power2_label", "pout1\n", NULL, NULL, 0},                        // 功率2标签
     {"power2_max", "3796000000\n", NULL, NULL, 0},                   // 功率2最大值
     {"power2_max_alarm", "0\n", NULL, NULL, 0},                // 功率2最大报警
     {"power2_rated_max", "3300000000\n", NULL, NULL, 0},              // 功率2额定最大值
-    {"temp1_crit", "0\n", NULL, NULL, 0},                  // 温度1临界值
+    {"temp1_crit", "130000\n", NULL, NULL, 0},                  // 温度1临界值
     {"temp1_crit_alarm", "0\n", NULL, NULL, 0},               // 温度1临界报警
-    {"temp1_input", "0\n", NULL, NULL, 0},                   // 温度1输入
+    {"temp1_input", "18000\n", NULL, NULL, 0},                   // 温度1输入
     {"temp1_max", "120000\n", NULL, NULL, 0},                    // 温度1最大值
     {"temp1_max_alarm", "0\n", NULL, NULL, 0},                // 温度1最大报警
     {"temp1_rated_max", "62000\n", NULL, NULL, 0},               // 温度1额定最大值
-    {"temp2_crit", "0\n", NULL, NULL, 0},                  // 温度2临界值
+    {"temp2_crit", "130000\n", NULL, NULL, 0},                  // 温度2临界值
     {"temp2_crit_alarm", "0\n", NULL, NULL, 0},               // 温度2临界报警
-    {"temp2_input", "0\n", NULL, NULL, 0},                   // 温度2输入
+    {"temp2_input", "48000\n", NULL, NULL, 0},                   // 温度2输入
     {"temp2_max", "120000\n", NULL, NULL, 0},                    // 温度2最大值
     {"temp2_max_alarm", "0\n", NULL, NULL, 0},                // 温度2最大报警
     {"temp2_rated_max", "120000\n", NULL, NULL, 0},               // 温度2额定最大值
-    {"temp3_crit", "0\n", NULL, NULL, 0},                  // 温度3临界值
+    {"temp3_crit", "130000\n", NULL, NULL, 0},                  // 温度3临界值
     {"temp3_crit_alarm", "0\n", NULL, NULL, 0},               // 温度3临界报警
-    {"temp3_input", "0\n", NULL, NULL, 0},                   // 温度3输入
+    {"temp3_input", "43000\n", NULL, NULL, 0},                   // 温度3输入
     {"temp3_max", "120000\n", NULL, NULL, 0},                    // 温度3最大值
     {"temp3_max_alarm", "0\n", NULL, NULL, 0},                // 温度3最大报警
     {"temp3_rated_max", "115000\n", NULL, NULL, 0},               // 温度3额定最大值
     // {"of_node", "ali-psu\n", NULL, NULL, 0},                           // OF节点
     {"pwm1", "0\n", NULL, NULL, 0},                    // PWM1
-    {"pwm1_enable", "0\n", NULL, NULL, 0},               // PWM1使能
+    {"pwm1_enable", "1\n", NULL, NULL, 0},               // PWM1使能
     // {"update", "0\n", NULL, NULL, 0},                     // 更新
     // {"uevent", "0\n", NULL, NULL, 0},                    // U事件                        // OF节点
-
+	{"fan1_label", "fan1\n", NULL, NULL, 0},               // PWM1使能
+	{"fan2_label", "fan2\n", NULL, NULL, 0},               // PWM1使能
+	{"temp1_label", "temp1\n", NULL, NULL, 0},               // PWM1使能
+	{"temp2_label", "temp2\n", NULL, NULL, 0},               // PWM1使能
+	{"temp3_label", "temp3\n", NULL, NULL, 0},               // PWM1使能
     // 设备名称
     {"name", "alipsu\n", NULL, NULL, 0x00},                          // 设备名称
 };
