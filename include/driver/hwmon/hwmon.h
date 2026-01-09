@@ -10,6 +10,7 @@
 #pragma once
 
 #define HWMON_MNT_POINT "/sys/class/hwmon"
+#define HWMON_DEBUG_MNT_POINT "/sys/kernel/debug/pmbus"
 
 enum hwmon_class
 {

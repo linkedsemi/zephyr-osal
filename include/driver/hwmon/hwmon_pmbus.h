@@ -267,6 +267,19 @@ enum pmbus_attrs {
     PMBUS_ATTR_COUNT
 };
 
+enum pmbus_status_attr {
+    PMBUS_STATUS0_,
+    PMBUS_STATUS0_CML_,
+    PMBUS_STATUS0_FAN12_,
+    PMBUS_STATUS0_INPUT_,
+    PMBUS_STATUS0_IOUT_,
+    PMBUS_STATUS0_MFR_,
+    PMBUS_STATUS0_OTHER_,
+    PMBUS_STATUS0_TEMP_,
+    PMBUS_STATUS0_VOUT_,
+    PMBUS_STATUS_ATTR_COUNT
+};
+
 // 阿里PSU的PMBUS属性名称结构体定义
 static const char *const pmbus_attr_names[PMBUS_ATTR_COUNT] = {
     [PMBUS_AC_CYCLE] = "ac_cycle",
@@ -418,5 +431,17 @@ static const char *const pmbus_attr_names[PMBUS_ATTR_COUNT] = {
 	[PMBUS_TEMP2_LABEL] = "temp2_label",
 	[PMBUS_TEMP3_LABEL]	= "temp3_label",
 	[PMBUS_NAME] = "name",
+};
+
+static const char *const pmbus_status_attr_names[] = {
+    [PMBUS_STATUS0_] = "status0",
+    [PMBUS_STATUS0_CML_] = "status0_cml",
+    [PMBUS_STATUS0_FAN12_] = "status0_fan12",
+    [PMBUS_STATUS0_INPUT_] = "status0_input",
+    [PMBUS_STATUS0_IOUT_] = "status0_iout",
+    [PMBUS_STATUS0_MFR_] = "status0_mfr",
+    [PMBUS_STATUS0_OTHER_] = "status0_other",
+    [PMBUS_STATUS0_TEMP_] = "status0_temp",
+    [PMBUS_STATUS0_VOUT_] = "status0_vout",
 };
 #endif

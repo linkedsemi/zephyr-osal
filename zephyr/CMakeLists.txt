@@ -30,6 +30,7 @@ if(CONFIG_SOC_LSQSH_CPU2)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/ipmb/ipmb_test.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/stub/tcsendbreak.c
     )
+  zephyr_library_sources_ifdef(CONFIG_BOARD_ALISMC ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/hwmon/hwmon_pmbus_status.c)
 elseif(CONFIG_SOC_LSQSH_CPU1)
     zephyr_library_sources(
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/realpath.c
