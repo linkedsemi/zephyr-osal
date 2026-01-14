@@ -103,8 +103,8 @@ static const char *const pmbus_attr_names[PMBUS_ATTR_COUNT] = {
 #elif defined(CONFIG_BOARD_ALISMC)
 // 定义函数指针类型，便于使用
 
-typedef int (*hwmon_read_func_t)(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len);
-typedef int (*hwmon_write_func_t)(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len);
+typedef int (*hwmon_read_func_t)(const struct device *dev, uint8_t reg, uint8_t ali_len, uint8_t *buf, uint8_t *len);
+typedef int (*hwmon_write_func_t)(const struct device *dev, uint8_t reg, uint8_t ali_len, uint8_t *buf, uint8_t *len);
 
 struct pmbus_default_values {
     const char *attr_name;

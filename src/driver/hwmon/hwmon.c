@@ -5,9 +5,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <alloca.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/fs_sys.h>
 #include <zephyr/device.h>
@@ -111,110 +113,128 @@ static const struct pmbus_default_values pmbus_default_values[] = {
 #elif defined(CONFIG_BOARD_ALISMC)
 
 /* Show and Store Functions */
-static int zephyr_psu_word_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_word_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     uint16_t word;
     int ret = ali_psu_word_show(dev, reg, &word);
     if (ret == 0 && buf != NULL && len != NULL) {
-        buf[0] = word & 0xFF;
-        buf[1] = (word >> 8) & 0xFF;
-        *len = 2;
+        *len = snprintf(buf, *len, "0x%04x", word);
     }
+
     return ret;
 }
 
-static int zephyr_psu_word_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_word_store(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     if (buf == NULL || len == NULL || *len < 2) {
         return -EINVAL;
     }
-    uint16_t word = buf[0] | (buf[1] << 8);
+    uint16_t word = (uint16_t)atoi(buf);
     return ali_psu_word_store(dev, reg, word);
 }
 
-static int zephyr_psu_byte_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_byte_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     uint8_t byte;
     int ret = ali_psu_byte_show(dev, reg, &byte);
     if (ret == 0 && buf != NULL && len != NULL) {
-        buf[0] = byte;
-        *len = 1;
+        *len = snprintf(buf, *len, "0x%02x", byte);
     }
     return ret;
 }
 
-static int zephyr_psu_byte_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_byte_store(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     if (buf == NULL) {
         return -EINVAL;
     }
-    return ali_psu_byte_store(dev, reg, buf[0]);
+	uint16_t byte = (uint16_t)atoi(buf);
+    return ali_psu_byte_store(dev, reg, byte);
 }
 
-static int zephyr_psu_sensor_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_sensor_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     int64_t val;
     int ret = ali_psu_sensor_show(dev, reg, &val);
     if (ret == 0 && buf != NULL && len != NULL) {
-        for (int i = 0; i < sizeof(val) && i < *len; i++) {
-            buf[i] = (val >> (i * 8)) & 0xFF;
-        }
-        *len = sizeof(val);
+        *len = snprintf(buf, *len, "%lld", val);
     }
     return ret;
 }
 
-static int zephyr_psu_mfr_page_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_mfr_page_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     uint8_t page;
     int ret = ali_psu_mfr_page_show(dev, &page);
     if (ret == 0 && buf != NULL && len != NULL) {
-        buf[0] = page;
-        *len = 1;
+		*len = snprintf(buf, *len, "0x%02x", page);
     }
     return ret;
 }
 
-static int zephyr_psu_mfr_page_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_mfr_page_store(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     if (buf == NULL) {
         return -EINVAL;
     }
-    return ali_psu_mfr_page_store(dev, buf[0]);
+	uint8_t page = (uint8_t)atoi(buf);
+    return ali_psu_mfr_page_store(dev, page);
 }
 
-static int zephyr_psu_ac_cycle_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_ac_cycle_store(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     return ali_psu_ac_cycle_store(dev);
 }
 
-static int zephyr_psu_block_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_block_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    return ali_psu_block_show(dev, reg, buf, len);
+	uint8_t* buffer = alloca(ali_len);
+    uint8_t buf_sz = ali_len;
+    int ret = ali_psu_block_show(dev, reg, buffer, &buf_sz);
+	if (ret == 0 && buf != NULL && len != NULL) {
+		buffer[buf_sz] = '\0';
+		*len = snprintf(buf, *len, "%s", buffer);
+    }
+
+    return ret;
 }
 
-static int zephyr_psu_fw_version_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_fw_version_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    return ali_psu_fw_version_show(dev, reg, buf, len);
+	uint8_t* buffer = alloca(ali_len);
+    uint8_t buf_sz = ali_len;
+    int ret = ali_psu_fw_version_show(dev, reg, buffer, &buf_sz);
+	if (ret == 0 && buf != NULL && len != NULL) {
+		buffer[buf_sz] = '\0';
+		*len = snprintf(buf, *len, "%s", buffer);
+    }
+    return ret;
 }
 
-static int zephyr_psu_bootloader_str_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_bootloader_str_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    return ali_psu_bootloader_str_show(dev, reg, buf, len);
+	uint8_t* buffer = alloca(ali_len);
+    uint8_t buf_sz = ali_len;
+    int ret = ali_psu_bootloader_str_show(dev, reg, buffer, &buf_sz);
+	if (ret == 0 && buf != NULL && len != NULL) {
+		buffer[buf_sz] = '\0';
+		*len = snprintf(buf, *len, "%s", buffer);
+    }
+    return ret;
 }
 
-static int zephyr_psu_bootloader_str_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_bootloader_str_store(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     if (buf == NULL || len == NULL) {
@@ -223,13 +243,26 @@ static int zephyr_psu_bootloader_str_store(const struct device *dev, uint8_t reg
     return ali_psu_bootloader_str_store(dev, reg, buf, *len);
 }
 
-static int zephyr_psu_bootloader_hex_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_bootloader_hex_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    return ali_psu_bootloader_hex_show(dev, reg, buf, len);
+	uint8_t* buffer = alloca(ali_len);
+    uint8_t buf_sz = ali_len;
+    int ret = ali_powerbrick_block_hex_his_show(dev, reg, buffer, &buf_sz);
+
+	if (ret == 0 && buf != NULL && len != NULL) {
+        uint8_t buf_len = *len;
+        uint8_t index = 0;
+        for (uint8_t i = 0; i < buf_sz && index < buf_len; i++)
+        {
+            index += snprintf(buf + index, buf_len - index, i == (buf_sz - 1) ? "%02x" : "%02x ", buffer[i]);
+        }
+        *len = index;
+    }
+    return ret;
 }
 
-static int zephyr_psu_bootloader_hex_store(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_bootloader_hex_store(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     if (buf == NULL || len == NULL) {
@@ -238,51 +271,78 @@ static int zephyr_psu_bootloader_hex_store(const struct device *dev, uint8_t reg
     return ali_psu_bootloader_hex_store(dev, reg, buf, *len);
 }
 
-static int zephyr_psu_word_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_word_his_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    if (buf == NULL) {
-        return -EINVAL;
+
+	uint8_t val;
+	int ret = ali_psu_word_his_show(dev, reg, &val);
+	if (ret == 0 && buf != NULL && len != NULL) {
+        *len = snprintf(buf, *len, "0x%04x", val);
     }
-    return ali_psu_word_his_show(dev, reg, buf);
+    return ret;
 }
 
-static int zephyr_psu_byte_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_byte_his_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    if (buf == NULL) {
-        return -EINVAL;
+    uint8_t val;
+	int ret = ali_psu_byte_his_show(dev, reg, &val);
+	if (ret == 0 && buf != NULL && len != NULL) {
+        *len = snprintf(buf, *len, "0x%02x", val);
     }
-    return ali_psu_byte_his_show(dev, reg, buf);
+    return ret;
 }
 
-static int zephyr_psu_sensor_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_sensor_his_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     int64_t val;
     int ret = ali_psu_sensor_his_show(dev, reg, &val);
     if (ret == 0 && buf != NULL && len != NULL) {
-        for (int i = 0; i < sizeof(val) && i < *len; i++) {
-            buf[i] = (val >> (i * 8)) & 0xFF;
-        }
-        *len = sizeof(val);
+        *len = snprintf(buf, *len, "%lld", val);
     }
     return ret;
 }
 
-static int zephyr_psu_block_hex_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_psu_block_hex_his_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    return ali_psu_block_hex_his_show(dev, reg, buf, len);
+
+	int ret = ali_psu_block_hex_his_show(dev, reg, buf, len);
+	if (ret == 0 && buf != NULL && len != NULL) {
+		uint32_t val = buf[0] | (buf[1] << 8) | (buf[2] << 16) | (buf[3] << 24);
+        *len = snprintf(buf, *len, "0x%08" PRIx32, val);
+    }
+    return ret;
 }
 
-static int zephyr_powerbrick_block_hex_his_show(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_powerbrick_block_hex_his_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    return ali_powerbrick_block_hex_his_show(dev, reg, buf, len);
+    uint8_t* buffer = alloca(ali_len);
+    uint8_t buf_sz = ali_len;
+    int ret = ali_powerbrick_block_hex_his_show(dev, reg, buffer, &buf_sz);
+    if (ret == 0 && buf != NULL && len != NULL) {
+        uint8_t buf_len = *len;
+        uint8_t index = 0;
+
+        // 按每行16个字节格式化输出
+        for (uint8_t i = 0; i < buf_sz && index < buf_len; i++)
+        {
+            if (i > 0 && i % 16 == 0 && i != buf_sz - 1) {
+                // 每16个字节换行
+                index += snprintf(buf + index, buf_len - index, "\n");
+            }
+
+			index += snprintf(buf + index, buf_len - index, i == (buf_sz - 1) ? "%02X" : "%02X ", buffer[i]);
+        }
+        *len = index;
+    }
+    return ret;
 }
 
-static int zephyr_sensor_channel_get_voltage(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_sensor_channel_get_voltage(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
     LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
 	struct sensor_value value;
@@ -303,12 +363,12 @@ static int zephyr_sensor_channel_get_voltage(const struct device *dev, uint8_t r
         return ret;
     }
 
-	*len = snprintf(buf, *len, "%d\n", value.val1);
+	*len = snprintf(buf, *len, "%d", value.val1);
 
     return 0;
 }
 
-static int zephyr_sensor_channel_get_current(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_sensor_channel_get_current(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     struct sensor_value value;
@@ -329,12 +389,12 @@ static int zephyr_sensor_channel_get_current(const struct device *dev, uint8_t r
         return ret;
     }
 
-    *len = snprintf(buf, *len, "%d\n", value.val1);
+    *len = snprintf(buf, *len, "%d", value.val1);
 
     return 0;
 }
 
-static int zephyr_sensor_channel_get_power(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_sensor_channel_get_power(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     struct sensor_value value;
@@ -355,12 +415,12 @@ static int zephyr_sensor_channel_get_power(const struct device *dev, uint8_t reg
         return ret;
     }
 
-    *len = snprintf(buf, *len, "%d\n", value.val1);
+    *len = snprintf(buf, *len, "%d", value.val1);
 
     return 0;
 }
 
-static int zephyr_sensor_channel_get_temp(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_sensor_channel_get_temp(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
     LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
 	struct sensor_value value;
@@ -383,12 +443,12 @@ static int zephyr_sensor_channel_get_temp(const struct device *dev, uint8_t reg,
 
     // 将sensor_value转换为适当的格式存储到buf中
 
-    *len = snprintf(buf, *len, "%d\n", value.val1);
+    *len = snprintf(buf, *len, "%d", value.val1);
 
     return 0;
 }
 
-static int zephyr_sensor_channel_get_rpm(const struct device *dev, uint8_t reg, uint8_t *buf, uint8_t *len)
+static int zephyr_sensor_channel_get_rpm(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     struct sensor_value value;
@@ -409,7 +469,7 @@ static int zephyr_sensor_channel_get_rpm(const struct device *dev, uint8_t reg, 
         return ret;
     }
 
-    *len = snprintf(buf, *len, "%d\n", value.val1);
+    *len = snprintf(buf, *len, "%d", value.val1);
 
     return 0;
 }
@@ -476,8 +536,8 @@ static const struct pmbus_default_values pmbus_default_values[] = {
 
     // 页和引导加载程序相关属性
     {"mfr_page", "0\n", zephyr_psu_mfr_page_show, zephyr_psu_mfr_page_store, mfr_page},                           // 制造商页
-    {"mfr_pos_total", "0\n", zephyr_psu_bootloader_str_show, NULL, mfr_pos_total},                      // 制造商位置总数
-    {"mfr_pos_last", "0\n", zephyr_psu_bootloader_str_show, NULL, mfr_pos_last},                       // 制造商最后位置
+    {"mfr_pos_total", "0\n", zephyr_psu_block_hex_his_show, NULL, mfr_pos_total},                      // 制造商位置总数
+    {"mfr_pos_last", "0\n", zephyr_psu_block_hex_his_show, NULL, mfr_pos_last},                       // 制造商最后位置
     {"bootloader_key", "0\n", zephyr_psu_bootloader_str_show, zephyr_psu_bootloader_str_store, bootloader_key},                     // 引导加载程序密钥
     {"bootloader_product_key", "0\n", zephyr_psu_bootloader_str_show, zephyr_psu_bootloader_str_store, bootloader_product_key},             // 引导加载程序产品密钥
     {"bootloader_status", "0\n", zephyr_psu_bootloader_hex_show, zephyr_psu_bootloader_hex_store, bootloader_status},                  // 引导加载程序状态
@@ -739,7 +799,7 @@ static int hwmondev_open(struct fs_file_t *zfp, const char *file_name, fs_mode_t
 
 	struct hwmon_device_info *client = NULL;
 	char device_name[20];
-	char attr_name[20];
+	char attr_name[32];
 
 	if (get_hwmon_device(file_name, device_name, sizeof(device_name)) != 0) {
 		LOG_ERROR("HWMON device not found in path: %s", file_name);
@@ -1082,36 +1142,19 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 	case HWMON_PMBUS:
 		if (strlen(attr_name) > 0) {
 #if defined(CONFIG_BOARD_ALISMC)
-			// uint8_t old_page = 0;
-			// ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
-			// if (ret < 0) {
-			// 	LOG_ERROR("Failed to read current page: %d", old_page);
-			// 	return -EIO;
-			// }
-
-			// ret = ali_psu_mfr_page_store(cfg->in[0].dev, old_page+1);
-			// if (ret < 0) {
-			// 	LOG_ERROR("Failed to store new page: %d", old_page+1);
-			// 	return -EIO;
-			// }
-
-			// ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
-			// if (ret < 0) {
-			// 	LOG_ERROR("Read current updated page: %d", old_page);
-			// 	return -EIO;
-			// }
 			// 遍历pmbus_default_values数组查找对应的属性
 			for (int i = 0; i < ARRAY_SIZE(pmbus_default_values); i++) {
 				if (strcmp(pmbus_default_values[i].attr_name, attr_name) == 0) {
 					// 如果有特定的show函数，则调用它
 					if (pmbus_default_values[i].read_func) {
 						// 调用特定的show函数来获取值
-						char temp_buf[32];
+						char temp_buf[128];
 						uint8_t temp_len = sizeof(temp_buf);
 						if(is_single_underscore_input_attr(attr_name))
 						{
 							ret = pmbus_default_values[i].read_func(cfg->in[0].dev,
 																pmbus_default_values[i].index,
+																0,
 																temp_buf,
 																&temp_len);
 							if (ret == 0) {
@@ -1125,10 +1168,11 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 						else{
 							ret = pmbus_default_values[i].read_func(cfg->in[0].dev,
 																ali_psu_regs[pmbus_default_values[i].index],
+																ali_attr_len[pmbus_default_values[i].index],
 																temp_buf,
 																&temp_len);
 							if (ret >= 0) {
-								len = snprintf((char *)ptr, size, "%s", temp_buf);
+								len = snprintf((char *)ptr, size, "%s\n", temp_buf);
 								zfp->flags |= FS_FLAG_FILE_READ_END;
 								return len;
 							} else {
@@ -1371,24 +1415,6 @@ static ssize_t hwmondev_write(struct fs_file_t *zfp, const void *ptr, size_t siz
 		break;
 	case HWMON_PMBUS:
 #if defined(CONFIG_BOARD_ALISMC)
-		// uint8_t old_page = 0;
-		// ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
-		// if (ret < 0) {
-		// 	LOG_ERROR("Failed to read current page: %d", old_page);
-		// 	return -EIO;
-		// }
-
-		// ret = ali_psu_mfr_page_store(cfg->in[0].dev, old_page+1);
-		// if (ret < 0) {
-		// 	LOG_ERROR("Failed to store new page: %d", old_page+1);
-		// 	return -EIO;
-		// }
-
-		// ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
-		// if (ret < 0) {
-		// 	LOG_ERROR("Read current updated page: %d", old_page);
-		// 	return -EIO;
-		// }
 		for (int i = 0; i < ARRAY_SIZE(pmbus_default_values); i++) {
 			if (strcmp(pmbus_default_values[i].attr_name, attr_name) == 0) {
 				// 检查是否有写入函数
@@ -1397,6 +1423,7 @@ static ssize_t hwmondev_write(struct fs_file_t *zfp, const void *ptr, size_t siz
 					uint8_t write_len = size;
 					ret = pmbus_default_values[i].write_func(cfg->in[0].dev,
 															ali_psu_regs[pmbus_default_values[i].index],
+															ali_attr_len[pmbus_default_values[i].index],
 															(uint8_t *)ptr,
 															&write_len);
 					if (ret >= 0) {
