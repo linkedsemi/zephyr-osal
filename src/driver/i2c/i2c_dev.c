@@ -188,6 +188,7 @@ static ssize_t i2cdev_write(struct fs_file_t *zfp, const void *ptr, size_t size)
 	return size;
 }
 
+#if 0
 static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 							 struct i2c_msg_linux *msgs)
 {
@@ -218,6 +219,7 @@ static int i2cdev_ioctl_rdwr(const struct device *dev, unsigned nmsgs,
 	LOG_DBG("i2cdev_ioctl_rdwr successful----\n");
 	return nmsgs_sent;
 }
+#endif
 
 static unsigned long i2c_get_functionality(const struct device *dev)
 {
@@ -402,41 +404,65 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 		return 0;
 	case I2C_RDWR:
 	{
-		LOG_DBG("ioctl I2C_RDWR----\n");
+		LOG_DBG("ioctl I2C_RDWR--client->dev->[%s] client->addr[%d]--\n", client->dev->name, client->addr);
 
 		// rdwr_arg = va_arg(args, struct i2c_rdwr_ioctl_data);
-		struct i2c_rdwr_ioctl_data *rdwr_arg_ptr = va_arg(args, struct i2c_rdwr_ioctl_data *);
-		if (!rdwr_arg_ptr) {
+		struct i2c_rdwr_ioctl_data *rdwr_arg = va_arg(args, struct i2c_rdwr_ioctl_data *);
+		if (!rdwr_arg) {
             return -EINVAL;
         }
-        struct i2c_rdwr_ioctl_data rdwr_arg = *rdwr_arg_ptr;
+        // struct i2c_rdwr_ioctl_data rdwr_arg = *rdwr_arg_ptr;
 		// memcpy(&rdwr_arg, (struct i2c_rdwr_ioctl_data*)args, sizeof(rdwr_arg));
 
 		// LOG_ERROR("rdwr_arg.msgs = %s, rdwr_arg.nmsgs=%d----\n", rdwr_arg.msgs[0].buf, rdwr_arg.nmsgs);
 
-		if (!rdwr_arg.msgs || rdwr_arg.nmsgs == 0)
+		if (!rdwr_arg->msgs || rdwr_arg->nmsgs == 0)
 			return -EINVAL;
 
 		/*
 		 * Put an arbitrary limit on the number of messages that can
 		 * be sent at once
 		 */
-		if (rdwr_arg.nmsgs > I2C_RDWR_IOCTL_MAX_MSGS)
-			return -EINVAL;
+		if (rdwr_arg->nmsgs > I2C_RDWR_IOCTL_MAX_MSGS){
+			LOG_ERROR("Message count %d exceeds maximum %d",
+                  rdwr_arg->nmsgs, I2C_RDWR_IOCTL_MAX_MSGS);
+			return -EOPNOTSUPP;
+		}
 
-		size_t total_size = rdwr_arg.nmsgs * sizeof(struct i2c_msg_linux);
-		struct i2c_msg_linux *rdwr_pa = malloc(total_size);
-		if (rdwr_pa == NULL)
-		{
+		// 转换 i2c_msg_linux 到 i2c_msg
+		struct i2c_msg *msgs = malloc(rdwr_arg->nmsgs * sizeof(struct i2c_msg));
+		if (!msgs) {
 			return -ENOMEM;
 		}
-		memcpy(rdwr_pa, rdwr_arg.msgs, total_size);
 
-		int result = i2cdev_ioctl_rdwr(client->dev, rdwr_arg.nmsgs, rdwr_pa);
+		// 转换消息数组
+		for (int i = 0; i < rdwr_arg->nmsgs; i++) {
+			if (!rdwr_arg->msgs[i].buf && rdwr_arg->msgs[i].len > 0) {
+				LOG_ERROR("Invalid buffer pointer for message %d", i);
+				k_free(msgs);
+				return -EINVAL;
+			}
+			msgs[i].buf = (uint8_t *)rdwr_arg->msgs[i].buf;
+			msgs[i].len = rdwr_arg->msgs[i].len;
+			msgs[i].flags = rdwr_arg->msgs[i].flags & I2C_MSG_READ ? I2C_MSG_READ : I2C_MSG_WRITE;
+			if (i != 0) {
+				msgs[i].flags |= I2C_MSG_RESTART;
+			}
+		}
+		msgs[rdwr_arg->nmsgs - 1].flags |= I2C_MSG_STOP;
 
-		free(rdwr_pa);
+		int nmsgs_sent = rdwr_arg->nmsgs;
+		int result = i2c_transfer(client->dev, msgs, rdwr_arg->nmsgs, client->addr);
 
-		return result;
+		k_free(msgs);
+		if (result < 0) {
+			LOG_ERROR("i2c_transfer failed with error: %d", result);
+			nmsgs_sent = 0;
+		}
+
+		LOG_DBG("I2C_RDWR completed: %d messages processed", rdwr_arg->nmsgs);
+
+		return nmsgs_sent;
 	}
 	case I2C_SMBUS:
 	{
