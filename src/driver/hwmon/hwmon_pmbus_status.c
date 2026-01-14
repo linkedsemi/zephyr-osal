@@ -54,7 +54,7 @@ static struct fs_mount_t hwmonfs_mnt = {
 };
 
 static int zephyr_psu_status_read(const struct device* dev, uint8_t type,
-                                  uint8_t* buf, uint8_t* len)
+                                  uint8_t ali_len, uint8_t* buf, uint8_t* len)
 {
     if (type >= PMBUS_STATUS_ATTR_COUNT)
     {
@@ -407,6 +407,7 @@ static ssize_t hwmondev_read(struct fs_file_t* zfp, void* ptr, size_t size)
                             uint8_t temp_len = sizeof(temp_buf);
                             ret = pmbus_default_values[i].read_func(
                                 cfg->in[0].dev, pmbus_default_values[i].index,
+				ali_attr_len[pmbus_default_values[i].index],
                                 temp_buf, &temp_len);
                             if (ret >= 0)
                             {
@@ -448,130 +449,6 @@ static ssize_t hwmondev_read(struct fs_file_t* zfp, void* ptr, size_t size)
     return len > 0 ? len : 0;
 }
 
-static ssize_t hwmondev_write(struct fs_file_t* zfp, const void* ptr,
-                              size_t size)
-{
-    int ret = 0;
-
-    LOG_DBG("Reading from hwmon device");
-
-    if (!zfp || !ptr)
-    {
-        LOG_ERROR("Invalid parameters");
-        return -EINVAL;
-    }
-
-    struct hwmon_file_handle* handle = zfp->filep;
-    if (!handle)
-    {
-        LOG_ERROR("No client context");
-        return -EINVAL;
-    }
-
-    struct hwmon_device_info* client = handle->device;
-    const char* attr_name = handle->attr_name;
-
-    if (size > CONFIG_HWMON_DEV_MAX_SIZE)
-    {
-        size = CONFIG_HWMON_DEV_MAX_SIZE;
-    }
-
-    // 检查是否已经读取完成
-    if (zfp->flags & FS_FLAG_FILE_READ_END)
-    {
-        if (handle->nonblocking)
-        {
-            return -EAGAIN;
-        }
-        return 0;
-    }
-
-    const struct hwmon_ls_config* cfg = hwmon_ls_get_config(client->dev);
-    if (!cfg)
-    {
-        LOG_ERROR("Failed to get hwmon configuration");
-        return -ENODEV;
-    }
-
-    switch (cfg->class)
-    {
-        case HWMON_FAN: // TODO:
-            break;
-        case HWMON_ADC:
-            break;
-        case HWMON_TEMP:   // TODO:
-            break;
-        case HWMON_SENSOR: // TODO:
-            break;
-        case HWMON_PMBUS:
-            // uint8_t old_page = 0;
-            // ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
-            // if (ret < 0) {
-            // 	LOG_ERROR("Failed to read current page: %d", old_page);
-            // 	return -EIO;
-            // }
-
-            // ret = ali_psu_mfr_page_store(cfg->in[0].dev, old_page+1);
-            // if (ret < 0) {
-            // 	LOG_ERROR("Failed to store new page: %d", old_page+1);
-            // 	return -EIO;
-            // }
-
-            // ret = ali_psu_mfr_page_show(cfg->in[0].dev, &old_page);
-            // if (ret < 0) {
-            // 	LOG_ERROR("Read current updated page: %d", old_page);
-            // 	return -EIO;
-            // }
-            for (int i = 0; i < ARRAY_SIZE(pmbus_default_values); i++)
-            {
-                if (strcmp(pmbus_default_values[i].attr_name, attr_name) == 0)
-                {
-                    // 检查是否有写入函数
-                    if (pmbus_default_values[i].write_func)
-                    {
-                        // 调用特定的store函数来处理写入
-                        uint8_t write_len = size;
-                        ret = pmbus_default_values[i].write_func(
-                            cfg->in[0].dev, pmbus_default_values[i].index,
-                            (uint8_t*)ptr, &write_len);
-                        if (ret >= 0)
-                        {
-                            // 成功写入后，更新默认值（如果需要）
-                            return size; // 返回写入的字节数
-                        }
-                        else
-                        {
-                            LOG_ERROR("write function failed for attribute %s",
-                                      attr_name);
-                            return ret;
-                        }
-                    }
-                    else
-                    {
-                        // 如果没有写入函数，返回错误
-                        LOG_ERROR(
-                            "Write operation not supported for attribute %s",
-                            attr_name);
-                        return -EPERM; // 操作不允许
-                    }
-                }
-            }
-            // 如果没找到属性，返回错误
-            LOG_ERROR("Attribute %s not found in pmbus_default_values",
-                      attr_name);
-            return -ENOENT;
-            break;
-        case HWMON_MOC_FPGA:
-            break;
-        default:
-            LOG_ERROR("Unsupported device class: %d", cfg->class);
-            return -ENOTTY;
-    }
-
-    zfp->flags |= FS_FLAG_FILE_READ_END;
-    return size > 0 ? size : 0;
-}
-
 static int hwmon_poll_prepare_ctx(struct hwmon_file_handle* handle,
                                   struct zvfs_pollfd* pfd,
                                   struct k_poll_event** pev,
@@ -608,57 +485,6 @@ static int hwmon_poll_update_ctx(struct hwmon_file_handle* handle,
             pfd->revents |= ZVFS_POLLIN;
         }
         (*pev)++;
-    }
-
-    return 0;
-}
-
-static int hwmondev_ioctl(struct fs_file_t* zfp, unsigned long request,
-                          va_list args)
-{
-    LOG_DBG("hwmon ioctl: 0x%lx", request);
-
-    struct hwmon_file_handle* handle = zfp->filep;
-    if (!handle)
-    {
-        LOG_ERROR("No client context");
-        return -EINVAL;
-    }
-
-    switch (request)
-    {
-        case F_GETFL: // TODO:
-            return O_RDWR;
-
-        case F_SETFL:
-        {
-            int flags = va_arg(args, int);
-            handle->nonblocking = (flags & O_NONBLOCK) != 0;
-            LOG_DBG("Set nonblocking mode to %d", handle->nonblocking);
-            return 0;
-        }
-
-        case ZFD_IOCTL_POLL_PREPARE:
-        {
-            struct zvfs_pollfd* pfd = va_arg(args, struct zvfs_pollfd*);
-            struct k_poll_event** pev = va_arg(args, struct k_poll_event**);
-            struct k_poll_event* pev_end = va_arg(args, struct k_poll_event*);
-            return hwmon_poll_prepare_ctx(handle, pfd, pev, pev_end);
-        }
-
-        case ZFD_IOCTL_POLL_UPDATE:
-        {
-            struct zvfs_pollfd* pfd = va_arg(args, struct zvfs_pollfd*);
-            struct k_poll_event** pev = va_arg(args, struct k_poll_event**);
-            return hwmon_poll_update_ctx(handle, pfd, pev);
-        }
-
-        case ZFD_IOCTL_SET_LOCK:
-            return 0;
-
-        default:
-            LOG_ERROR("Unsupported ioctl request: 0x%lx", request);
-            return -ENOTTY;
     }
 
     return 0;
@@ -976,9 +802,9 @@ static const struct fs_file_system_t hwmondev_fs = {
     .open = hwmondev_open,
     .close = hwmondev_close,
     .read = hwmondev_read,
-    .write = hwmondev_write,
+    .write = NULL,
     .lseek = NULL,
-    .ioctl = hwmondev_ioctl,
+    .ioctl = NULL,
     .opendir = hwmondev_opendir,
     .readdir = hwmondev_readdir,
     .closedir = hwmondev_closedir,
