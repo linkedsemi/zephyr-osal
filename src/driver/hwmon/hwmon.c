@@ -265,10 +265,18 @@ static int zephyr_psu_bootloader_hex_show(const struct device *dev, uint8_t reg,
 static int zephyr_psu_bootloader_hex_store(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    if (buf == NULL || len == NULL) {
+    if (buf == NULL || len == NULL || ali_len != 1) {
         return -EINVAL;
     }
-    return ali_psu_bootloader_hex_store(dev, reg, buf, *len);
+
+	uint32_t val = 0;
+	if (sscanf(buf, "%x", &val) != 1) {
+		LOG_ERROR("cannot write %s\n", buf);
+		return -1;
+	}
+
+	uint8_t v = val;
+    return ali_psu_bootloader_hex_store(dev, reg, &v, 1);
 }
 
 static int zephyr_psu_word_his_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
