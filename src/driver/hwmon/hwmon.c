@@ -197,7 +197,7 @@ static int zephyr_psu_ac_cycle_store(const struct device *dev, uint8_t reg, uint
 static int zephyr_psu_block_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-	uint8_t* buffer = alloca(ali_len);
+	uint8_t* buffer = alloca(ali_len + 1);
     uint8_t buf_sz = ali_len;
     int ret = ali_psu_block_show(dev, reg, buffer, &buf_sz);
 	if (ret == 0 && buf != NULL && len != NULL) {
@@ -211,7 +211,7 @@ static int zephyr_psu_block_show(const struct device *dev, uint8_t reg, uint8_t 
 static int zephyr_psu_fw_version_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-	uint8_t* buffer = alloca(ali_len);
+	uint8_t* buffer = alloca(ali_len + 1);
     uint8_t buf_sz = ali_len;
     int ret = ali_psu_fw_version_show(dev, reg, buffer, &buf_sz);
 	if (ret == 0 && buf != NULL && len != NULL) {
@@ -224,7 +224,7 @@ static int zephyr_psu_fw_version_show(const struct device *dev, uint8_t reg, uin
 static int zephyr_psu_bootloader_str_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-	uint8_t* buffer = alloca(ali_len);
+	uint8_t* buffer = alloca(ali_len + 1);
     uint8_t buf_sz = ali_len;
     int ret = ali_psu_bootloader_str_show(dev, reg, buffer, &buf_sz);
 	if (ret == 0 && buf != NULL && len != NULL) {
@@ -246,7 +246,7 @@ static int zephyr_psu_bootloader_str_store(const struct device *dev, uint8_t reg
 static int zephyr_psu_bootloader_hex_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-	uint8_t* buffer = alloca(ali_len);
+	uint8_t* buffer = alloca(ali_len + 1);
     uint8_t buf_sz = ali_len;
     int ret = ali_powerbrick_block_hex_his_show(dev, reg, buffer, &buf_sz);
 
@@ -320,7 +320,7 @@ static int zephyr_psu_block_hex_his_show(const struct device *dev, uint8_t reg, 
 static int zephyr_powerbrick_block_hex_his_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    uint8_t* buffer = alloca(ali_len);
+    uint8_t* buffer = alloca(ali_len + 1);
     uint8_t buf_sz = ali_len;
     int ret = ali_powerbrick_block_hex_his_show(dev, reg, buffer, &buf_sz);
     if (ret == 0 && buf != NULL && len != NULL) {
