@@ -474,6 +474,30 @@ static int zephyr_sensor_channel_get_rpm(const struct device *dev, uint8_t reg, 
     return 0;
 }
 
+static int zephyr_ali_psu_update_show(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
+{
+	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
+    uint8_t byte;
+    int ret = ali_psu_update_show(dev, &byte);
+    if (ret == 0 && buf != NULL && len != NULL) {
+        *len = snprintf(buf, *len, "%d", byte);
+    }
+    return ret;
+}
+
+static int zephyr_ali_psu_update_store(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
+{
+	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
+    if (buf == NULL) {
+        return -EINVAL;
+    }
+	uint8_t* buffer = alloca(ali_len + 1);
+	memcpy(buffer, buf, *len);
+	buffer[*len] = '\0';
+	uint8_t byte = atoi(buffer);
+    return ali_psu_update_store(dev, byte);
+}
+
 static const struct pmbus_default_values pmbus_default_values[] = {
     // 电源控制相关属性
     {"ac_cycle", "0\n", NULL, zephyr_psu_ac_cycle_store, 0},                           // 电源AC周期控制
@@ -635,7 +659,7 @@ static const struct pmbus_default_values pmbus_default_values[] = {
     // {"of_node", "ali-psu\n", NULL, NULL, 0},                           // OF节点
     {"pwm1", "0\n", NULL, NULL, 0},                    // PWM1
     {"pwm1_enable", "1\n", NULL, NULL, 0},               // PWM1使能
-    // {"update", "0\n", NULL, NULL, 0},                     // 更新
+    {"update", "0\n", zephyr_ali_psu_update_show, zephyr_ali_psu_update_store, 0},                     // 更新
     // {"uevent", "0\n", NULL, NULL, 0},                    // U事件                        // OF节点
 	{"fan1_label", "fan1\n", NULL, NULL, 0},               // PWM1使能
 	{"fan2_label", "fan2\n", NULL, NULL, 0},               // PWM1使能
