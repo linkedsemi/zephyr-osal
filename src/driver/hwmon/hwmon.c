@@ -1872,6 +1872,10 @@ static int hwmondev_stat(struct fs_mount_t *mountp, const char *path,
 	return -ENOENT;
 }
 
+static int hwmondev_trunc(struct fs_file_t *filp, off_t length) {
+	return 0;
+}
+
 static const struct fs_file_system_t hwmondev_fs = {
 	.mount = hwmondev_mount,
 	.unmount = hwmondev_unmount,
@@ -1886,6 +1890,7 @@ static const struct fs_file_system_t hwmondev_fs = {
 	.closedir = hwmondev_closedir,
 	.stat = hwmondev_stat,
 	.statvfs = hwmondev_statvfs,
+	.truncate = hwmondev_trunc,
 };
 
 static int hwmon_dev_init(void)
