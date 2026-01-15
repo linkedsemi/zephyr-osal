@@ -1422,14 +1422,6 @@ static ssize_t hwmondev_write(struct fs_file_t *zfp, const void *ptr, size_t siz
 		size = CONFIG_HWMON_DEV_MAX_SIZE;
 	}
 
-	// 检查是否已经读取完成
-	if (zfp->flags & FS_FLAG_FILE_READ_END) {
-		if (handle->nonblocking) {
-			return -EAGAIN;
-		}
-		return 0;
-	}
-
 	const struct hwmon_ls_config *cfg = hwmon_ls_get_config(client->dev);
 	if (!cfg) {
 		LOG_ERROR("Failed to get hwmon configuration");
@@ -1484,7 +1476,6 @@ static ssize_t hwmondev_write(struct fs_file_t *zfp, const void *ptr, size_t siz
 		return -ENOTTY;
 	}
 
-	zfp->flags |= FS_FLAG_FILE_READ_END;
 	return size > 0 ? size : 0;
 }
 
