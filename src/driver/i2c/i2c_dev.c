@@ -452,7 +452,7 @@ static int i2cdev_ioctl(struct fs_file_t *zfp, unsigned long request, va_list ar
 		msgs[rdwr_arg->nmsgs - 1].flags |= I2C_MSG_STOP;
 
 		int nmsgs_sent = rdwr_arg->nmsgs;
-		int result = i2c_transfer(client->dev, msgs, rdwr_arg->nmsgs, client->addr);
+		int result = i2c_transfer(client->dev, msgs, rdwr_arg->nmsgs, rdwr_arg->msgs[0].addr);
 
 		k_free(msgs);
 		if (result < 0) {
