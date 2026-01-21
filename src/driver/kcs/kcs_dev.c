@@ -13,16 +13,11 @@
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/fs_sys.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/posix/fcntl.h>
 #include <zephyr/sys/atomic.h>
 #include <zephyr/zvfs/eventfd.h>
 
 LOG_MODULE_REGISTER(kcs_dev, CONFIG_LOG_DEFAULT_LEVEL); // 注册日志模块
-
-#define MAX_KCS_DEVICES 14 /* The maximum number of KCS devices */
-
-#define KCS_ZERO_DATA 0
-
-#define KCS_POLL_INTERVAL_MS 100 // 轮询周期
 
 #define DT_DRV_COMPAT linkedsemi_ls_ipmi_kcs
 
@@ -33,7 +28,8 @@ BUILD_ASSERT(KCS_NUM <= MAX_KCS_DEVICES, "Exceeded maximum KCS device count");
 #define KCS_DEVICE_PROCESS(inst)                                               \
     {.dev = DEVICE_DT_GET(DT_INST(inst, DT_DRV_COMPAT)),                       \
      .label = DT_INST_PROP(inst, label),                                       \
-     .opened = ATOMIC_INIT(0)},
+     .opened = ATOMIC_INIT(0),                                                 \
+     .dev_idx = inst},
 
 struct kcs_device_info kcs_devices[] = {
     DT_INST_FOREACH_STATUS_OKAY(KCS_DEVICE_PROCESS)};
@@ -55,6 +51,60 @@ static const char* getFileName(const char* filePath)
         return lastSlash + 1;
     }
     return filePath;
+}
+
+static void kcs_queue_init(struct kcs_device_info* dev)
+{
+    k_fifo_init(&dev->empty_queue);
+    k_fifo_init(&dev->data_queue);
+
+    for (int i = 0; i < RX_BUF_COUNT; i++)
+    {
+        dev->packet_pool[i].data_ptr = kcs_raw_buffers[dev->dev_idx][i];
+        dev->packet_pool[i].len = 0;
+        k_fifo_put(&dev->empty_queue, &dev->packet_pool[i]);
+    }
+}
+
+static int kcs_receive_callback(const struct device* dev, void* param,
+                                ipmi_event_type_t type)
+{
+    LOG_DBG("kcs_receive_callback entered");
+    if (type != IPMI_RX_EVENT)
+    {
+        return -EINVAL;
+    }
+
+    struct kcs_device_info* client = (struct kcs_device_info*)param;
+
+    /* 1. Take a clean buffer from the free queue */
+    struct kcs_rx_packet* packet = k_fifo_get(&client->empty_queue, K_NO_WAIT);
+    if (!packet)
+    {
+        LOG_ERROR("KCS RX drop: no free buffer");
+        return -ENOMEM;
+    }
+
+    /* 2. Read data from the hardware into packet->data_ptr */
+    int ret = ipmi_read(dev, packet->data_ptr, RX_BUF_SIZE);
+    if (ret <= 0)
+    {
+        /* Read failed, returning buffer */
+        k_fifo_put(&client->empty_queue, packet);
+        return ret;
+    }
+
+    /* 3. Padding packet */
+    packet->len = (size_t)ret;
+
+    /* 4. Place into the data queue */
+    k_fifo_put(&client->data_queue, packet);
+
+    /* 5. Trigger poll */
+    k_poll_signal_raise(&client->poll_sig, 0);
+
+    LOG_DBG("KCS RX: %d bytes queued", ret);
+    return 0;
 }
 
 static int kcsdev_open(struct fs_file_t* zfp, const char* file_name,
@@ -102,6 +152,14 @@ static int kcsdev_open(struct fs_file_t* zfp, const char* file_name,
     zfp->filep = client;
     zfp->mp = &kcsfs_mnt;
 
+    int ret = ipmi_set_callback(client->dev, kcs_receive_callback, client);
+    if (ret < 0)
+    {
+        LOG_ERROR("Failed to set IPMI callback: %d", ret);
+        atomic_set(&client->opened, 0);
+        return ret;
+    }
+
     LOG_DBG("KCS device with name '%s' opened successfully\n", file_name);
     return 0;
 }
@@ -113,7 +171,6 @@ static int kcsdev_close(struct fs_file_t* zfp)
     {
         struct kcs_device_info* client = zfp->filep;
         atomic_set(&client->opened, 0);
-        client->eventfd = -1;
     }
     if (zfp->mp)
     {
@@ -124,93 +181,35 @@ static int kcsdev_close(struct fs_file_t* zfp)
     return 0;
 }
 
-// 轮询处理函数：尝试从底层读取一条请求，读到就缓存并唤醒 POLLIN
-static void kcs_rx_poll_work(struct k_work* work)
-{
-    struct k_work_delayable* dwork = CONTAINER_OF(work, struct k_work_delayable,
-                                                  work);
-    // 遍历所有设备，逐个轮询
-    for (int i = 0; i < KCS_NUM; i++)
-    {
-        struct kcs_device_info* client = &kcs_devices[i];
-
-        // 若已有待取消息，跳过本轮（等用户态 read 取走）
-        if (atomic_get(&client->has_msg))
-        {
-            continue;
-        }
-
-        // 直接调用 ipmi_read尝试读取消息
-        int ret = ipmi_read(client->dev, client->rx_buf,
-                            sizeof(client->rx_buf));
-
-        LOG_DBG("kcs_rx_poll_work ret:%d\n", ret);
-
-        if (ret > 0)
-        {
-            client->rx_len = (size_t)ret;
-            atomic_set(&client->has_msg, 1);
-            // 唤醒等 POLLIN 的用户
-            if (client->eventfd >= 0)
-            {
-                int err = zvfs_eventfd_write(client->eventfd, 1);
-                if (err < 0)
-                {
-                    LOG_ERROR("eventfd write failed: %d (fd=%d)", errno,
-                              client->eventfd);
-                }
-            }
-        }
-
-        // 重新安排下一轮
-    }
-    k_work_schedule(dwork, K_MSEC(KCS_POLL_INTERVAL_MS));
-}
-
-// kcsdev_read：优先从设备文件"待取缓冲"返回，若没有消息则调用api读取
 static ssize_t kcsdev_read(struct fs_file_t* zfp, void* ptr, size_t size)
 {
-    LOG_DBG("kcsdev_read start----\n");
     struct kcs_device_info* client = zfp->filep;
-
-    if (client == NULL)
+    if (!client || !ptr)
     {
-        LOG_ERROR("No client context");
         return -EINVAL;
     }
 
-    if (size > CONFIG_KCS_DEV_MAX_SIZE)
+    struct kcs_rx_packet* packet = k_fifo_get(&client->data_queue, K_NO_WAIT);
+    if (!packet)
     {
-        size = CONFIG_KCS_DEV_MAX_SIZE;
+        return -EAGAIN; // No data available
     }
 
-    // 先检查设备文件是否有缓存的待取消息
-    if (atomic_get(&client->has_msg))
+    size_t n = packet->len;
+    if (n > size)
     {
-        size_t n = client->rx_len;
-        if (n > size)
-        {
-            // 缓冲不够，返回 -ENOSPC，保持缓存不动，方便重试
-            return -ENOSPC;
-        }
-        memcpy(ptr, client->rx_buf, n);
-        // 清空"待取"消息
-        client->rx_len = 0;
-        atomic_set(&client->has_msg, 0);
-        LOG_DBG("Read %zu bytes data (from devfile cache)", n);
-        return (ssize_t)n;
+        // Buffer too small, drop packet and return error
+        k_fifo_put(&client->empty_queue, packet);
+        return -ENOSPC;
     }
 
-    // 没有缓存，则直接请求api读取
-    int ret = ipmi_read(client->dev, (uint8_t*)ptr, size);
-    if (ret < 0)
-    {
-        LOG_ERROR("Read failed: %d", ret);
-        return ret;
-    }
+    memcpy(ptr, packet->data_ptr, n);
 
-    LOG_DBG("Read %zu bytes data %s", size, ptr);
-    return size;
+    // Return buffer to free pool
+    k_fifo_put(&client->empty_queue, packet);
+
+    LOG_DBG("Read %zu bytes", n);
+    return (ssize_t)n;
 }
 
 static ssize_t kcsdev_write(struct fs_file_t* zfp, const void* ptr, size_t size)
@@ -248,6 +247,41 @@ static ssize_t kcsdev_write(struct fs_file_t* zfp, const void* ptr, size_t size)
     return size;
 }
 
+static int kcs_poll_prepare_ctx(struct kcs_device_info* dev,
+                                struct zvfs_pollfd* pfd,
+                                struct k_poll_event** pev,
+                                struct k_poll_event* pev_end)
+{
+    if (pfd->events & ZVFS_POLLIN)
+    {
+        if (*pev == pev_end)
+        {
+            return -ENOMEM;
+        }
+        (*pev)->obj = &dev->poll_sig;
+        (*pev)->type = K_POLL_TYPE_SIGNAL;
+        (*pev)->mode = K_POLL_MODE_NOTIFY_ONLY;
+        (*pev)->state = K_POLL_STATE_NOT_READY;
+        (*pev)++;
+        k_poll_signal_reset(&dev->poll_sig);
+    }
+    return 0;
+}
+
+static int kcs_poll_update_ctx(struct kcs_device_info* dev,
+                               struct zvfs_pollfd* pfd,
+                               struct k_poll_event** pev)
+{
+    bool has_data = !k_fifo_is_empty(&dev->data_queue);
+    if ((pfd->events & ZVFS_POLLIN) && has_data)
+    {
+        pfd->revents |= ZVFS_POLLIN;
+    }
+    LOG_DBG("POLL_UPDATE: data_queue_empty=%d", !has_data);
+
+    return 0;
+}
+
 /* IPMI 2.0 - Table 9-1, KCS Interface Status Register Bits */
 #define KCS_STATUS_STATE(state) (state << 6)
 #define KCS_STATUS_STATE_MASK GENMASK(7, 6)
@@ -259,10 +293,9 @@ static ssize_t kcsdev_write(struct fs_file_t* zfp, const void* ptr, size_t size)
 static int kcsdev_ioctl(struct fs_file_t* zfp, unsigned long request,
                         va_list args)
 {
-    LOG_DBG("kcsdev_ioctl start----\n");
+    LOG_DBG("kcsdev_ioctl start ---- request=%lu\n", request);
     struct kcs_device_info* client = zfp->filep;
     int ret = 0;
-    int fd = -1;
     if (!client)
         return -EINVAL;
 
@@ -281,16 +314,23 @@ static int kcsdev_ioctl(struct fs_file_t* zfp, unsigned long request,
         case IPMI_BMC_IOCTL_FORCE_ABORT:
             ipmi_force_abort(client->dev);
             break;
+        case F_GETFL:
+            return O_RDWR;
+        case F_SETFL:
+            return 0;
         case ZFD_IOCTL_POLL_PREPARE:
-            fd = va_arg(args, int);
-            if (fd < 0)
-            {
-                LOG_ERROR("Invalid eventfd: %d\n", fd);
-                return -EINVAL;
-            }
-            client->eventfd = fd;
-            LOG_DBG("KCS: registered eventfd %d\n", fd);
-            break;
+        {
+            struct zvfs_pollfd* pfd = va_arg(args, struct zvfs_pollfd*);
+            struct k_poll_event** pev = va_arg(args, struct k_poll_event**);
+            struct k_poll_event* pev_end = va_arg(args, struct k_poll_event*);
+            return kcs_poll_prepare_ctx(client, pfd, pev, pev_end);
+        }
+        case ZFD_IOCTL_POLL_UPDATE:
+        {
+            struct zvfs_pollfd* pfd = va_arg(args, struct zvfs_pollfd*);
+            struct k_poll_event** pev = va_arg(args, struct k_poll_event**);
+            return kcs_poll_update_ctx(client, pfd, pev);
+        }
         default:
             ret = -EINVAL;
             break;
@@ -438,17 +478,6 @@ static int kcs_dev_init(void)
 
     LOG_DBG("kcs_num = %d\n", KCS_NUM);
 
-    // 初始化每个设备的 poll 信号与轮询工作
-    for (int i = 0; i < KCS_NUM; i++)
-    {
-        atomic_set(&kcs_devices[i].has_msg, 0);
-        kcs_devices[i].rx_len = 0;
-        k_work_init_delayable(&kcs_devices[i].rx_poller, kcs_rx_poll_work);
-        // 启动轮询
-        k_work_schedule(&kcs_devices[i].rx_poller,
-                        K_MSEC(KCS_POLL_INTERVAL_MS));
-    }
-
     // 输出kcs设备name和label信息
     for (int i = 0; i < KCS_NUM; i++)
     {
@@ -457,6 +486,9 @@ static int kcs_dev_init(void)
             LOG_DBG("kcs_devices[%d].dev->name = %s\n", i,
                     kcs_devices[i].dev->name);
         }
+        kcs_queue_init(&kcs_devices[i]);
+        k_poll_signal_init(&kcs_devices[i].poll_sig);
+
         if (kcs_devices[i].label != NULL)
         {
             LOG_DBG("kcs_devices[%d].label = %s\n", i, kcs_devices[i].label);
