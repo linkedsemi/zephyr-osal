@@ -1107,7 +1107,7 @@ static int gpiodev_ioctl(struct fs_file_t* zfp, unsigned long request,
                 mask, value);
             if (client->gpio_union.linehandle.gdev->dev != NULL)
             {
-                ret = gpio_port_set_masked_raw(
+                ret = gpio_port_set_masked(
                     client->gpio_union.linehandle.gdev->dev, mask, value);
                 if (ret < 0)
                 {
