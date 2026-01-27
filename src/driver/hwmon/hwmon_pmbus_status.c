@@ -77,7 +77,7 @@ static int zephyr_psu_status_read(const struct device* dev, uint8_t type,
         return rval;
     }
 
-    int length = snprintf(buf, *len, "%d\n", health.val1);
+    int length = snprintf(buf, *len, "0x%02x\n", health.val1);
     if (length < 0)
     {
         return -1;
