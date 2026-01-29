@@ -746,16 +746,16 @@ static bool is_valid_adc_attr(const char *attr_name)
 }
 
 static const struct moc_fpga_default_values moc_fpga_default_values[] = {
-    {"temp1_input", "0\n"},
+    {"temp1_input", "na\n"},
     {"temp1_label", "Max Temp\n"},
-	{"temp2_input", "0\n"},
+	{"temp2_input", "na\n"},
 	{"temp2_label", "SDM Temp\n"},
-	{"temp3_input", "0\n"},
+	{"temp3_input", "na\n"},
 	{"temp3_label", "MAC0 Temp\n"},
-	{"temp4_input", "0\n"},
+	{"temp4_input", "na\n"},
 	{"temp4_label", "MAC1 Temp\n"},
-	{"version", "0\n"},
-	{"chip_id", "0\n"},
+	{"version", "na\n"},
+	{"chip_id", "na\n"},
 };
 
 static const char *find_moc_fpga_default_value(const char *attr_name)
