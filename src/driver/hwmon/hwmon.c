@@ -1194,7 +1194,8 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 								zfp->flags |= FS_FLAG_FILE_READ_END;
 								return len;
 							} else {
-								LOG_ERROR("sensor function failed for attribute %s, using default", attr_name);
+								LOG_ERROR("sensor function failed for attribute %s", attr_name);
+								return ret;
 							}
 						}
 						else{
@@ -1208,8 +1209,8 @@ static ssize_t hwmondev_read(struct fs_file_t *zfp, void *ptr, size_t size)
 								zfp->flags |= FS_FLAG_FILE_READ_END;
 								return len;
 							} else {
-								// 如果特定函数失败，返回默认值
-								LOG_ERROR("Show function failed for attribute %s, using default", attr_name);
+								LOG_ERROR("Show function failed for attribute %s", attr_name);
+								return ret;
 							}
 						}
 
