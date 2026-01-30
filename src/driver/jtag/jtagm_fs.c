@@ -114,25 +114,6 @@ static enum jtag_tapstate kernel_state_2_usr_state[TAP_RESET+1] = {
     JTAG_STATE_IDLE,JTAG_STATE_UPDATEIR,JTAG_STATE_CAPTUREIR,JTAG_STATE_TLRESET
 };
 
-static int jtagm_clk_bitbang(struct jtagm_device *jtag, int tms, int tdi)
-{
-    uint8_t tdo;
-
-    jtag_sw_xfer(jtag->dev, JTAG_TCK, 0);
-    jtag_sw_xfer(jtag->dev, JTAG_TMS, tms);
-    jtag_sw_xfer(jtag->dev, JTAG_TDI, tdi);
-    k_busy_wait(1);
-
-    jtag_sw_xfer(jtag->dev, JTAG_TCK, 1);
-    jtag_sw_xfer(jtag->dev, JTAG_TMS, tms);
-    jtag_sw_xfer(jtag->dev, JTAG_TDI, tdi);
-    k_busy_wait(1);
-
-    jtag_tdo_get(jtag->dev, &tdo);
-
-    return tdo;
-}
-
 static int jtagm_ioctl(struct fs_file_t *zfp, unsigned long cmd, va_list args)
 {
     int ret = 0;
@@ -232,7 +213,7 @@ static int jtagm_ioctl(struct fs_file_t *zfp, unsigned long cmd, va_list args)
             LOG_DBG("set bitbang, num_bit: %d", packet->length);
             for (int i = 0; i < packet->length; i++)
             {
-                packet->data[i].tdo = jtagm_clk_bitbang(jtag, packet->data[i].tms, packet->data[i].tdi);
+                packet->data[i].tdo = jtag_tck_run_cycle(jtag->dev, packet->data[i].tms, packet->data[i].tdi);
             }
         }
         break;
