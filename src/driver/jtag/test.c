@@ -13,7 +13,7 @@
 #include <zephyr/posix/dirent.h>
 #include <zephyr/shell/shell.h>
 #include <linux/ioctl.h>
-#include <jtag/jtagm_fs.h>
+#include <driver/jtag/jtagm_fs.h>
 #include <stdlib.h>
 #include <stdio.h>
 

@@ -18,7 +18,7 @@
 #include <zephyr/drivers/jtag.h>
 #include <zephyr/fs/devfs.h>
 #include <linux/ioctl.h>
-#include <jtag/jtagm_fs.h>
+#include <driver/jtag/jtagm_fs.h>
 #include "ls_soc_gpio.h"
 
 #define DT_DRV_COMPAT linkedsemi_ls_jtag
@@ -63,20 +63,20 @@ static int jtagm_open(struct fs_file_t *zfp, const char *name, fs_mode_t flags)
 
     if (!jtag || !device_is_ready(jtag->dev))
     {
-        LOG_ERR("Device %s not ready", name);
+        LOG_ERROR("Device %s not ready", name);
         return -ENODEV;
     }
 
     if (!atomic_cas(&jtag->is_open, 0, 1))
     {
-        LOG_ERR("Device %s already opened", name);
+        LOG_ERROR("Device %s already opened", name);
         return -EBUSY;
     }
 
     if(jtag_tap_set(jtag->dev, TAP_RESET))
     {
-        LOG_ERR("Device %s reset fail", name);
-        return -EBUSY; 
+        LOG_ERROR("Device %s reset fail", name);
+        return -EBUSY;
     }
 
     if (strcmp(name, "jtag1") == 0)
