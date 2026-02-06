@@ -56,22 +56,9 @@ static struct fs_mount_t hwmonfs_mnt = {
 static int zephyr_psu_status_read(const struct device* dev, uint8_t type,
                                   uint8_t ali_len, uint8_t* buf, uint8_t* len)
 {
-    if (type >= PMBUS_STATUS_ATTR_COUNT)
-    {
-        LOG_ERROR("invalid type 0x%x", type);
-        return -1;
-    }
-
     struct sensor_value health;
     int rval = 0;
-    if ((rval = sensor_sample_fetch(dev)) < 0)
-    {
-        LOG_ERROR("Failed to fetch samples: %d", rval);
-        return rval;
-    }
-
-    health.val2 = type;
-    if ((rval = sensor_channel_get(dev, SENSOR_CHAN_GAUGE_STATE_OF_HEALTH, &health)) < 0)
+    if ((rval = ali_psu_value_get(dev, type, &health)) < 0)
     {
         LOG_ERROR("Failed to get status [%d]: %d", type, rval);
         return rval;
@@ -88,15 +75,15 @@ static int zephyr_psu_status_read(const struct device* dev, uint8_t type,
 
 // clang-format off
 static const struct pmbus_default_values pmbus_default_values[] = {
-    {"status0",         "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_},
-    {"status0_cml",     "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_CML_},
-    {"status0_fan12",   "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_FAN12_},
-    {"status0_input",   "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_INPUT_},
-    {"status0_iout",    "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_IOUT_},
-    {"status0_mfr",     "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_MFR_},
-    {"status0_other",   "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_OTHER_},
-    {"status0_temp",    "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_TEMP_},
-    {"status0_vout",    "0\n", zephyr_psu_status_read, NULL, PMBUS_STATUS0_VOUT_},
+    {"status0",         "0\n", zephyr_psu_status_read, NULL, status_word},
+    {"status0_cml",     "0\n", zephyr_psu_status_read, NULL, status_cml},
+    {"status0_fan12",   "0\n", zephyr_psu_status_read, NULL, status_fans12},
+    {"status0_input",   "0\n", zephyr_psu_status_read, NULL, status_input},
+    {"status0_iout",    "0\n", zephyr_psu_status_read, NULL, status_iout},
+    {"status0_mfr",     "0\n", zephyr_psu_status_read, NULL, status_mfr_spec},
+    {"status0_other",   "0\n", zephyr_psu_status_read, NULL, status_other},
+    {"status0_temp",    "0\n", zephyr_psu_status_read, NULL, status_temp},
+    {"status0_vout",    "0\n", zephyr_psu_status_read, NULL, status_vout},
 };
 // clang-format on
 

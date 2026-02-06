@@ -350,33 +350,7 @@ static int zephyr_powerbrick_block_hex_his_show(const struct device *dev, uint8_
     return ret;
 }
 
-static int zephyr_sensor_channel_get_voltage(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
-{
-    LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-	struct sensor_value value;
-    int ret;
-
-    if (buf == NULL || len == NULL) {
-        return -EINVAL;
-    }
-
-    ret = sensor_sample_fetch(dev);
-    if (ret < 0) {
-        return ret;
-    }
-
-	value.val2 = reg;
-    ret = sensor_channel_get(dev, SENSOR_CHAN_VOLTAGE, &value);
-    if (ret < 0) {
-        return ret;
-    }
-
-	*len = snprintf(buf, *len, "%d", value.val1);
-
-    return 0;
-}
-
-static int zephyr_sensor_channel_get_current(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
+static int zephyr_sensor_get_value(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
 {
 	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
     struct sensor_value value;
@@ -386,93 +360,7 @@ static int zephyr_sensor_channel_get_current(const struct device *dev, uint8_t r
         return -EINVAL;
     }
 
-    ret = sensor_sample_fetch(dev);
-    if (ret < 0) {
-        return ret;
-    }
-
-	value.val2 = reg;
-    ret = sensor_channel_get(dev, SENSOR_CHAN_CURRENT, &value);
-    if (ret < 0) {
-        return ret;
-    }
-
-    *len = snprintf(buf, *len, "%d", value.val1);
-
-    return 0;
-}
-
-static int zephyr_sensor_channel_get_power(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
-{
-	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    struct sensor_value value;
-    int ret;
-
-    if (buf == NULL || len == NULL) {
-        return -EINVAL;
-    }
-
-    ret = sensor_sample_fetch(dev);
-    if (ret < 0) {
-        return ret;
-    }
-
-	value.val2 = reg;
-    ret = sensor_channel_get(dev, SENSOR_CHAN_POWER, &value);
-    if (ret < 0) {
-        return ret;
-    }
-
-    *len = snprintf(buf, *len, "%d", value.val1);
-
-    return 0;
-}
-
-static int zephyr_sensor_channel_get_temp(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
-{
-    LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-	struct sensor_value value;
-    int ret;
-
-    if (buf == NULL || len == NULL) {
-        return -EINVAL;
-    }
-
-    ret = sensor_sample_fetch(dev);
-    if (ret < 0) {
-        return ret;
-    }
-
-	value.val2 = reg;
-    ret = sensor_channel_get(dev, SENSOR_CHAN_GAUGE_TEMP, &value);
-    if (ret < 0) {
-        return ret;
-    }
-
-    // 将sensor_value转换为适当的格式存储到buf中
-
-    *len = snprintf(buf, *len, "%d", value.val1);
-
-    return 0;
-}
-
-static int zephyr_sensor_channel_get_rpm(const struct device *dev, uint8_t reg, uint8_t ali_len,  uint8_t *buf, uint8_t *len)
-{
-	LOG_DBG("%s dev[%p], dev->name[%s], dev->reg[%d]", __func__, dev, dev->name ,reg);
-    struct sensor_value value;
-    int ret;
-
-    if (buf == NULL || len == NULL) {
-        return -EINVAL;
-    }
-
-    ret = sensor_sample_fetch(dev);
-    if (ret < 0) {
-        return ret;
-    }
-
-	value.val2 = reg;
-    ret = sensor_channel_get(dev, SENSOR_CHAN_RPM, &value);
+    ret = ali_psu_value_get(dev, reg, &value);
     if (ret < 0) {
         return ret;
     }
@@ -586,11 +474,11 @@ static const struct pmbus_default_values pmbus_default_values[] = {
 	 // 其他属性
     // {"device", "ALI-PSU\n", NULL, NULL, 0},                             // 设备
     // {"subsystem", "power\n", NULL, NULL, 0},                           // 子系统
-    {"in2_input", "409500\n", NULL, NULL, 0},                      // 输入2
+    {"in2_input", "409500\n", NULL, NULL, read_vcap},                      // 输入2
     {"in2_label", "vcap\n", NULL, NULL, 0},                             // 输入2标签
     {"in3_crit", "58500\n", NULL, NULL, 0},                     // 输入3临界值
     {"in3_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入3临界报警
-    {"in3_input", "54968\n", zephyr_sensor_channel_get_voltage, NULL, 2},                      // 输入3
+    {"in3_input", "54968\n", zephyr_sensor_get_value, NULL, read_vout},                      // 输入3
     {"in3_label", "vout1\n", NULL, NULL, 0},                             // 输入3标签
     {"in3_lcrit", "45000\n", NULL, NULL, 0},                    // 输入3低临界值
     {"in3_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入3低临界报警
@@ -600,7 +488,7 @@ static const struct pmbus_default_values pmbus_default_values[] = {
     {"in4_crit", "295000\n", NULL, NULL, 0},                     // 输入4临界值
     {"in4_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入4临界报警
     {"in4_fault", "0\n", NULL, NULL, 0},                         // 输入4故障
-    {"in4_input", "230000\n", zephyr_sensor_channel_get_voltage, NULL, 1},                      // 输入4
+    {"in4_input", "230000\n", zephyr_sensor_get_value, NULL, read_vin1},                      // 输入4
     {"in4_label", "vin1\n", NULL, NULL, 0},                             // 输入4标签
     {"in4_lcrit", "78000\n", NULL, NULL, 0},                    // 输入4低临界值
     {"in4_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入4低临界报警
@@ -610,57 +498,57 @@ static const struct pmbus_default_values pmbus_default_values[] = {
     {"in1_crit", "295000\n", NULL, NULL, 0},                     // 输入1临界值
     {"in1_crit_alarm", "0\n", NULL, NULL, 0},                   // 输入1临界报警
     {"in1_fault", "0\n", NULL, NULL, 0},                         // 输入1故障
-    {"in1_input", "229500\n", zephyr_sensor_channel_get_voltage, NULL, 0},                      // 输入1
+    {"in1_input", "229500\n", zephyr_sensor_get_value, NULL, read_vin},                      // 输入1
     {"in1_label", "vin\n", NULL, NULL, 0},                             // 输入1标签
     {"in1_lcrit", "78000\n", NULL, NULL, 0},                    // 输入1低临界值
     {"in1_lcrit_alarm", "0\n", NULL, NULL, 0},                  // 输入1低临界报警
     {"in1_rated_max", "264000\n", NULL, NULL, 0},                   // 输入1额定最大值
     {"in1_rated_min", "0\n", NULL, NULL, 0},                   // 输入1额定最小值
-    {"curr1_input", "2757\n", zephyr_sensor_channel_get_current, NULL, 0},                   // 电流1输入
+    {"curr1_input", "2757\n", zephyr_sensor_get_value, NULL, read_iin},                   // 电流1输入
     {"curr1_label", "iin\n", NULL, NULL, 0},                          // 电流1标签
     {"curr1_max", "25000\n", NULL, NULL, 0},                    // 电流1最大值
     {"curr1_max_alarm", "0\n", NULL, NULL, 0},                 // 电流1最大报警
     {"curr1_rated_max", "22000\n", NULL, NULL, 0},                // 电流1额定最大值
     {"curr2_crit", "79500\n", NULL, NULL, 0},                   // 电流2临界值
     {"curr2_crit_alarm", "0\n", NULL, NULL, 0},                // 电流2临界报警
-    {"curr2_input", "10328\n", zephyr_sensor_channel_get_current, NULL, 1},                   // 电流2输入
+    {"curr2_input", "10328\n", zephyr_sensor_get_value, NULL, read_iout},                   // 电流2输入
     {"curr2_label", "iout1\n", NULL, NULL, 0},                          // 电流2标签
     {"curr2_max", "71000\n", NULL, NULL, 0},                    // 电流2最大值
     {"curr2_max_alarm", "0\n", NULL, NULL, 0},                 // 电流2最大报警
     {"curr2_rated_max", "61125\n", NULL, NULL, 0},                // 电流2额定最大值
     {"fan1_alarm", "0\n", NULL, NULL, 0},                       // 风扇1报警
     {"fan1_fault", "0\n", NULL, NULL, 0},                       // 风扇1故障
-    {"fan1_input", "3780\n", zephyr_sensor_channel_get_rpm, NULL, 0},                     // 风扇1输入
+    {"fan1_input", "3780\n", zephyr_sensor_get_value, NULL, fan_command_1},                     // 风扇1输入
     {"fan1_target", "0\n", NULL, NULL, 0},                // 风扇1目标
     {"fan2_alarm", "0\n", NULL, NULL, 0},                       // 风扇2报警
     {"fan2_fault", "0\n", NULL, NULL, 0},                       // 风扇2故障
-    {"fan2_input", "3512\n", zephyr_sensor_channel_get_rpm, NULL, 1},                     // 风扇2输入
+    {"fan2_input", "3512\n", zephyr_sensor_get_value, NULL, fan_command_2},                     // 风扇2输入
     // {"power", "0\n", NULL, NULL, 0},                              // 功率
     {"power1_alarm", "0\n", NULL, NULL, 0},                    // 功率1报警
-    {"power1_input", "591000000\n", zephyr_sensor_channel_get_power, NULL, 0},                  // 功率1输入
+    {"power1_input", "591000000\n", zephyr_sensor_get_value, NULL, read_pin},                  // 功率1输入
     {"power1_label", "pin\n", NULL, NULL, 0},                        // 功率1标签
     {"power1_max", "4296000000\n", NULL, NULL, 0},                   // 功率1最大值
     {"power1_rated_max", "3800000000\n", NULL, NULL, 0},              // 功率1额定最大值
-    {"power2_input", "567000000\n", zephyr_sensor_channel_get_power, NULL, 1},                  // 功率2输入
+    {"power2_input", "567000000\n", zephyr_sensor_get_value, NULL, read_pout},                  // 功率2输入
     {"power2_label", "pout1\n", NULL, NULL, 0},                        // 功率2标签
     {"power2_max", "3796000000\n", NULL, NULL, 0},                   // 功率2最大值
     {"power2_max_alarm", "0\n", NULL, NULL, 0},                // 功率2最大报警
     {"power2_rated_max", "3300000000\n", NULL, NULL, 0},              // 功率2额定最大值
     {"temp1_crit", "130000\n", NULL, NULL, 0},                  // 温度1临界值
     {"temp1_crit_alarm", "0\n", NULL, NULL, 0},               // 温度1临界报警
-    {"temp1_input", "18000\n", zephyr_sensor_channel_get_temp, NULL, 0},                   // 温度1输入
+    {"temp1_input", "18000\n", zephyr_sensor_get_value, NULL, read_temp1},                   // 温度1输入
     {"temp1_max", "120000\n", NULL, NULL, 0},                    // 温度1最大值
     {"temp1_max_alarm", "0\n", NULL, NULL, 0},                // 温度1最大报警
     {"temp1_rated_max", "62000\n", NULL, NULL, 0},               // 温度1额定最大值
     {"temp2_crit", "130000\n", NULL, NULL, 0},                  // 温度2临界值
     {"temp2_crit_alarm", "0\n", NULL, NULL, 0},               // 温度2临界报警
-    {"temp2_input", "48000\n", NULL, NULL, 0},                   // 温度2输入
+    {"temp2_input", "48000\n", NULL, NULL, read_temp2},                   // 温度2输入
     {"temp2_max", "120000\n", NULL, NULL, 0},                    // 温度2最大值
     {"temp2_max_alarm", "0\n", NULL, NULL, 0},                // 温度2最大报警
     {"temp2_rated_max", "120000\n", NULL, NULL, 0},               // 温度2额定最大值
     {"temp3_crit", "130000\n", NULL, NULL, 0},                  // 温度3临界值
     {"temp3_crit_alarm", "0\n", NULL, NULL, 0},               // 温度3临界报警
-    {"temp3_input", "43000\n", NULL, NULL, 0},                   // 温度3输入
+    {"temp3_input", "43000\n", NULL, NULL, read_temp3},                   // 温度3输入
     {"temp3_max", "120000\n", NULL, NULL, 0},                    // 温度3最大值
     {"temp3_max_alarm", "0\n", NULL, NULL, 0},                // 温度3最大报警
     {"temp3_rated_max", "115000\n", NULL, NULL, 0},               // 温度3额定最大值
