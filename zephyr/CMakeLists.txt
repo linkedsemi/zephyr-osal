@@ -63,3 +63,13 @@ endif()
 
     zephyr_library_include_directories_ifdef(CONFIG_ALIPSU ${ZEPHYR_BASE}/drivers/sensor/alipsu)
 endif()
+
+if(CONFIG_SHELL_MEMTESTER)
+    zephyr_library_named(memtester)
+    zephyr_library_sources(
+            ${ZEPHYR_CURRENT_MODULE_DIR}/src/shell/mem/memtester/memtester.c
+            ${ZEPHYR_CURRENT_MODULE_DIR}/src/shell/mem/memtester/tests.c
+    )
+    zephyr_library_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/zephyr)
+    zephyr_library_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/)
+endif()
