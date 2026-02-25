@@ -27,6 +27,8 @@ if(CONFIG_SOC_LSQSH_CPU2)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/alibaba-misc/ali-moc-fpga.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/jtag/jtagm_fs.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/jtag/test.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/espi/espi_fs.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/espi/test.c
 
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/ipmb/ipmb_dev.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/driver/ipmb/ipmb_test.c
