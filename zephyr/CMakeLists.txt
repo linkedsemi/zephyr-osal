@@ -61,7 +61,7 @@ endif()
 
     zephyr_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/include)
 
-    zephyr_library_link_libraries(ELMFAT)
+    #zephyr_library_link_libraries(ELMFAT)
 
     zephyr_library_include_directories_ifdef(CONFIG_ALIPSU ${ZEPHYR_BASE}/drivers/sensor/alipsu)
 endif()
