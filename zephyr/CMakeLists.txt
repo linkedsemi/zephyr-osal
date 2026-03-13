@@ -59,7 +59,7 @@ endif()
 
     zephyr_library_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/)
 
-    zephyr_export_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/include)
+    zephyr_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/include)
 
     zephyr_library_link_libraries(ELMFAT)
 
