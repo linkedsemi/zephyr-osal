@@ -16,20 +16,20 @@
    License along with the GNU C Library; if not, see
    <https://www.gnu.org/licenses/>.  */
 
-#ifndef __iovec_defined
-#define __iovec_defined 1
+// #ifndef __iovec_defined
+// #define __iovec_defined 1
 
-#define __need_size_t
-#include <stddef.h>
+// #define __need_size_t
+// #include <stddef.h>
 
-/* Structure for scatter/gather I/O.  */
-#if !defined(HAVE_IOVEC)
-#define HAVE_IOVEC 1
-struct iovec
-  {
-    void *iov_base;	/* Pointer to data.  */
-    size_t iov_len;	/* Length of data.  */
-  };
-#endif /* HAVE_IOVEC */
+// /* Structure for scatter/gather I/O.  */
+// #if !defined(HAVE_IOVEC)
+// #define HAVE_IOVEC 1
+// struct iovec
+//   {
+//     void *iov_base;	/* Pointer to data.  */
+//     size_t iov_len;	/* Length of data.  */
+//   };
+// #endif /* HAVE_IOVEC */
 
-#endif
+// #endif
