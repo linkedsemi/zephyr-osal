@@ -39,6 +39,7 @@ if(CONFIG_SOC_LSQSH_CPU2)
 elseif(CONFIG_SOC_LSQSH_CPU1)
     zephyr_library_sources(
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/realpath.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/pipe.c
     )
 elseif(CONFIG_BOARD_QEMU_RISCV32_QEMU_VIRT_RISCV32)
     zephyr_library_sources(
