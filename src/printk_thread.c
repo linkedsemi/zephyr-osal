@@ -14,6 +14,11 @@ void printk_thread(const char *fmt, ...)
            tname,
            __func__, __LINE__);
 
+    va_list ap;
 
-    printk(fmt);
+    va_start(ap, fmt);
+
+    vprintk(fmt, ap);
+
+    va_end(ap);
 }
