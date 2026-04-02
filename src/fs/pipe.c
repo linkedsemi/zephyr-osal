@@ -10,7 +10,7 @@
 __attribute__((weak))
 int pipe(int __fildes[2])
 {
-    assert(!"pipe() should NEVER be called on Zephyr!");
+    __ASSERT_UNREACHABLE;
 
     return -1;
 }
