@@ -40,6 +40,7 @@ elseif(CONFIG_SOC_LSQSH_CPU1)
     zephyr_library_sources(
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/realpath.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/pipe.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/net/getifaddrs.c
     )
 elseif(CONFIG_BOARD_QEMU_RISCV32_QEMU_VIRT_RISCV32)
     zephyr_library_sources(
@@ -60,7 +61,10 @@ endif()
 
     zephyr_library_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/)
 
-    zephyr_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/include)
+    zephyr_include_directories(
+        ${ZEPHYR_CURRENT_MODULE_DIR}/include
+        ${ZEPHYR_CURRENT_MODULE_DIR}/include/net
+        )
 
     #zephyr_library_link_libraries(ELMFAT)
 
