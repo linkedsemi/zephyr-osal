@@ -1,5 +1,3 @@
-#pragma once
-
 #include <zephyr/posix/unistd.h>
 #include <assert.h>
 
@@ -10,7 +8,7 @@
 __attribute__((weak))
 int pipe(int __fildes[2])
 {
-    __ASSERT_UNREACHABLE;
+    __ASSERT(0, "pipe() should never be called");
 
     return -1;
 }
