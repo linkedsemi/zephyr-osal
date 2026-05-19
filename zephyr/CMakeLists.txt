@@ -59,9 +59,12 @@ elseif(CONFIG_BOARD_QEMU_RISCV32_QEMU_VIRT_RISCV32)
     zephyr_library_link_libraries(FS)
 endif()
 
-    zephyr_library_include_directories(${ZEPHYR_CURRENT_MODULE_DIR}/)
+    zephyr_library_include_directories(
+        ${ZEPHYR_CURRENT_MODULE_DIR}/include
+        ${ZEPHYR_CURRENT_MODULE_DIR}/include/net
+        )
 
-    zephyr_include_directories(
+    zephyr_export_include_directories(
         ${ZEPHYR_CURRENT_MODULE_DIR}/include
         ${ZEPHYR_CURRENT_MODULE_DIR}/include/net
         )
