@@ -18,6 +18,8 @@
 
 LOG_MODULE_DECLARE(overlay_fs);
 
+#define LOG_ERROR(...)    Z_LOG(LOG_LEVEL_ERR, __VA_ARGS__)
+
 int is_dir_exists(struct overlay_dirp *dirp, const char* path)
 {
     overlay_dir_t* cur = dirp->head;

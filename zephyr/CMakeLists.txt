@@ -41,6 +41,8 @@ elseif(CONFIG_SOC_LSQSH_CPU1)
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/realpath.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/pipe.c
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/net/getifaddrs.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/overlay_fs.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/overlayfs/utils.c
     )
 elseif(CONFIG_BOARD_QEMU_RISCV32_QEMU_VIRT_RISCV32)
     zephyr_library_sources(

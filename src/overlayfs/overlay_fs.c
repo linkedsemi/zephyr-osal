@@ -23,6 +23,8 @@
 
 #define MAX_BUF_LEN 128
 
+#define LOG_ERROR(...)    Z_LOG(LOG_LEVEL_ERR, __VA_ARGS__)
+
 static char* overlayfs_mnt_point = NULL;
 static char* rofs_mnt_point = NULL;
 static char* rwfs_mnt_point = NULL;
