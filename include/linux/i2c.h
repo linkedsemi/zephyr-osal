@@ -7,8 +7,8 @@
  * Frodo Looijaard <frodol@dds.nl>
  */
 
-#ifndef _UAPI_LINUX_I2C_H
-#define _UAPI_LINUX_I2C_H
+#ifndef _LINUX_I2C_H
+#define _LINUX_I2C_H
 
 #include <linux/types.h>
 
@@ -70,7 +70,7 @@
  * Those flags are only for use with broken/nonconforming slaves, and with
  * adapters which are known to support the specific mangling options they need.
  */
-struct i2c_msg_linux
+struct i2c_msg
 {
 	__u16 addr;
 	__u16 flags;
@@ -163,12 +163,12 @@ union i2c_smbus_data
 #define I2C_SMBUS_BLOCK_PROC_CALL 7 /* SMBus 2.0 */
 #define I2C_SMBUS_I2C_BLOCK_DATA 8
 
-#define I2C_CLIENT_PEC 0x04			/* Use Packet Error Checking */
-#define I2C_CLIENT_TEN 0x10			/* we have a ten bit chip address */
-									/* Must equal I2C_M_TEN below */
-#define I2C_CLIENT_SLAVE 0x20		/* we are the slave */
-#define I2C_CLIENT_HOST_NOTIFY 0x40 /* We want to use I2C host notify */
-#define I2C_CLIENT_WAKE 0x80		/* for board_info; true iff can wake */
-#define I2C_CLIENT_SCCB 0x9000		/* Use Omnivision SCCB protocol */
+// #define I2C_CLIENT_PEC 0x04			`/* Use Packet Error Checking */
+// #define I2C_CLIENT_TEN 0x10			/* we have a ten bit chip address */
+// 									/* Must equal I2C_M_TEN below */
+// #define I2C_CLIENT_SLAVE 0x20		/* we are the slave */
+// #define I2C_CLIENT_HOST_NOTIFY 0x40 /* We want to use I2C host notify */
+// #define I2C_CLIENT_WAKE 0x80		/* for board_info; true iff can wake */
+// #define I2C_CLIENT_SCCB 0x9000		/* Use Omnivision SCCB protocol */
 
 #endif /* _UAPI_LINUX_I2C_H */
