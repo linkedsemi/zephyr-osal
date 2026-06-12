@@ -61,6 +61,12 @@ elseif(CONFIG_BOARD_QEMU_RISCV32_QEMU_VIRT_RISCV32)
     zephyr_library_link_libraries(FS)
 endif()
 
+    # Always compile pipe and getifaddrs (needed regardless of CPU config)
+    zephyr_library_sources(
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/fs/pipe.c
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/net/getifaddrs.c
+        )
+
     zephyr_library_include_directories(
         ${ZEPHYR_CURRENT_MODULE_DIR}/include
         ${ZEPHYR_CURRENT_MODULE_DIR}/include/net
