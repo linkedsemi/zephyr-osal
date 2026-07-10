@@ -12,17 +12,19 @@
 
 LOG_MODULE_DECLARE(gpio_dev, LOG_LEVEL_INF);
 
-// 提取主设备号 暂时使用
-int major(dev_t dev)
-{
-    return (int)((dev >> 8) & 0xfff);
-}
+#define LOG_ERROR(...)    Z_LOG(LOG_LEVEL_ERR, __VA_ARGS__)
 
-// 提取次设备号 暂时使用
-int minor(dev_t dev)
-{
-    return (int)(dev & 0xff);
-}
+// // 提取主设备号 暂时使用
+// int major(dev_t dev)
+// {
+//     return (int)((dev >> 8) & 0xfff);
+// }
+
+// // 提取次设备号 暂时使用
+// int minor(dev_t dev)
+// {
+//     return (int)(dev & 0xff);
+// }
 
 int scandir(const char *dirpath, struct dirent ***namelist,
             int (*filter)(const struct dirent *),
@@ -154,31 +156,31 @@ int access(const char* pathname, int mode)
     return -1;
 }
 
-int ppoll(struct pollfd *fds, unsigned int nfds, const struct timespec *timeout_ts, const sigset_t *sigmask)
-{
-    int ret;
-    uint32_t timeout_ms;
+// int ppoll(struct pollfd *fds, unsigned int nfds, const struct timespec *timeout_ts, const sigset_t *sigmask)
+// {
+//     int ret;
+//     uint32_t timeout_ms;
 
-    // 如果未提供超时时间，返回错误
-    if (timeout_ts == NULL)
-    {
-        errno = EINVAL; // 无效参数
-        return -1;
-    }
+//     // 如果未提供超时时间，返回错误
+//     if (timeout_ts == NULL)
+//     {
+//         errno = EINVAL; // 无效参数
+//         return -1;
+//     }
 
-    // 如果提供了超时时间，则将其转换为毫秒
-    timeout_ms = timeout_ts->tv_sec * MSEC_PER_SEC + timeout_ts->tv_nsec / NSEC_PER_MSEC;
+//     // 如果提供了超时时间，则将其转换为毫秒
+//     timeout_ms = timeout_ts->tv_sec * MSEC_PER_SEC + timeout_ts->tv_nsec / NSEC_PER_MSEC;
 
-    // Zephyr 不支持信号掩码，忽略 sigmask 参数
-    ARG_UNUSED(sigmask);
+//     // Zephyr 不支持信号掩码，忽略 sigmask 参数
+//     ARG_UNUSED(sigmask);
 
-    // 使用 Zephyr 的 poll 实现
-    ret = poll(fds, nfds, timeout_ms);
-    if (ret < 0)
-    {
-        errno = -ret; // 设置 errno
-        return -1;
-    }
+//     // 使用 Zephyr 的 poll 实现
+//     ret = poll(fds, nfds, timeout_ms);
+//     if (ret < 0)
+//     {
+//         errno = -ret; // 设置 errno
+//         return -1;
+//     }
 
-    return ret;
-}
+//     return ret;
+// }
