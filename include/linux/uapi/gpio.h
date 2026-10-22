@@ -35,7 +35,6 @@
  */
 struct gpiochip_info
 {
-    const struct gpio_device_info *gdev;
 	char name[GPIO_MAX_NAME_SIZE];
 	char label[GPIO_MAX_NAME_SIZE];
 	__u32 lines;
