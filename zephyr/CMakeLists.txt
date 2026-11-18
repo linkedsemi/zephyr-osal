@@ -68,6 +68,20 @@ endif()
         ${ZEPHYR_CURRENT_MODULE_DIR}/src/net/getifaddrs.c
         )
 
+    # IPMI request latency probe (RAM ring + "ipmi_lat" shell command), see
+    # include/ipmi_lat.h. It lives in this module next to its header instead of
+    # in the application so that every branch that uses zephyr-osal links the
+    # probe on its own, even if it does not pick up the application's changes:
+    # sdbusplus' connection.hpp, basu and dbus-broker declare ipmi_lat_cyc(),
+    # ipmi_lat_bus_step(), ipmi_lat_write_retry() and the brq_*/brs_* hooks
+    # themselves and would otherwise be left with undefined references.
+    # Compiled unconditionally: the whole body is behind
+    # CONFIG_OPENBMC_IPMI_LAT, and the timing helpers must exist even when the
+    # probe is off.
+    zephyr_library_sources(
+        ${ZEPHYR_CURRENT_MODULE_DIR}/src/ipmi_lat.c
+        )
+
     zephyr_library_include_directories(
         ${ZEPHYR_CURRENT_MODULE_DIR}/include
         ${ZEPHYR_CURRENT_MODULE_DIR}/include/net

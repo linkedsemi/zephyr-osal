@@ -4,3 +4,24 @@ config ZEPHYR_OSAL
 
 config SHELL_MEMTESTER
     bool "shell memtester tool"
+
+config OPENBMC_IPMI_LAT
+    bool "IPMI request latency probe (RAM ring + ipmi_lat shell command)"
+    default n
+    depends on SHELL
+    help
+      Records k_uptime_ticks() at ten points of every IPMI request/response
+      cycle (net-ipmid receive, D-Bus hand-off, the two moments dbus-broker
+      dequeues and forwards each message, ipmid entry/exit, D-Bus reply,
+      datagram sent) into a 128-entry RAM ring, and exposes them as
+      "ipmi_lat dump" / "ipmi_lat clear".
+
+      Nothing is printed on the hot path on purpose: one IPMI request already
+      spends ~33 ms blocking in UART output at 115200 baud (the two ipmid
+      traces plus the DBG line), so printk-based instrumentation would measure
+      itself. With this disabled the probe call sites compile to nothing.
+
+      The implementation lives in this module (src/ipmi_lat.c) rather than in
+      the application so that every branch sharing zephyr-osal links the probe
+      symbols declared by sdbusplus, basu and dbus-broker, even when it does
+      not pick up the application's changes.
